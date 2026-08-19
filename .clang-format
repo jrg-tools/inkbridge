@@ -1,0 +1,8 @@
+# CrossPoint-style: Google base, 2-space indent, 100 columns, attached braces.
+BasedOnStyle: Google
+IndentWidth: 2
+ColumnLimit: 100
+PointerAlignment: Left
+DerivePointerAlignment: false
+AllowShortFunctionsOnASingleLine: Inline
+SortIncludes: true

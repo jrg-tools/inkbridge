@@ -1,0 +1,134 @@
+:root {
+	--paper: #f5f5f0;
+	--ink: #111111;
+	--dark-gray: #444444;
+	--mid-gray: #777777;
+	--light-gray: #d8d8d3;
+	--white: #ffffff;
+
+	--font: 'Helvetica Neue', 'Inter', 'Segoe UI', Arial, sans-serif;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	background: var(--paper);
+	color: var(--ink);
+	font-family: var(--font);
+	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+/* --- e-ink controls --- */
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 48px;
+	padding: 0 20px;
+	width: 100%;
+	border: 1.5px solid var(--ink);
+	border-radius: 4px;
+	background: var(--paper);
+	color: var(--ink);
+	font-family: var(--font);
+	font-size: 14px;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	cursor: pointer;
+	box-shadow: 2px 2px 0 var(--light-gray);
+	transition:
+		transform 60ms ease,
+		box-shadow 60ms ease;
+	user-select: none;
+}
+
+.btn:active:not(:disabled) {
+	transform: translate(2px, 2px);
+	box-shadow: none;
+}
+
+.btn:disabled {
+	border-color: var(--light-gray);
+	color: var(--mid-gray);
+	box-shadow: none;
+	cursor: not-allowed;
+}
+
+.btn--primary {
+	background: var(--ink);
+	color: var(--paper);
+}
+
+.btn--primary:disabled {
+	background: var(--light-gray);
+	color: var(--mid-gray);
+	border-color: var(--light-gray);
+}
+
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible {
+	outline: 2px solid var(--ink);
+	outline-offset: 2px;
+}
+
+label {
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--dark-gray);
+	margin-bottom: 6px;
+}
+
+input[type='text'],
+input[type='email'],
+input[type='tel'],
+input[type='url'],
+input[type='password'],
+input[type='number'],
+select {
+	width: 100%;
+	min-height: 44px;
+	padding: 8px 12px;
+	border: 1.5px solid var(--dark-gray);
+	border-radius: 4px;
+	background: var(--white);
+	color: var(--ink);
+	font-family: var(--font);
+	font-size: 16px;
+}
+
+.panel {
+	border: 1.5px solid var(--ink);
+	border-radius: 4px;
+	background: var(--paper);
+	padding: 16px;
+}
+
+.section-title {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.15em;
+	text-transform: uppercase;
+	color: var(--dark-gray);
+	border-bottom: 1px solid var(--light-gray);
+	padding-bottom: 8px;
+	margin: 0 0 16px;
+}

@@ -1,0 +1,6 @@
+.pio/
+.vscode/
+.venv/
+.cache/
+data/
+**/.DS_Store

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <path d="M924,112L924,916C924,926.486 915.486,935 905,935L119,935C108.514,935 100,926.486 100,916L100,112C100,101.514 108.514,93 119,93L905,93C915.486,93 924,101.514 924,112Z" style="fill:url(#_Linear1);"/>
+    <path d="M143,623L881,132L881,415L681,476L812,893L143,893L143,623Z" style="fill:white;fill-rule:nonzero;"/>
+    <circle cx="474" cy="534" r="45" style="fill:url(#_Radial2);"/>
+    <g>
+        <circle cx="854" cy="502" r="13" style="fill:white;"/>
+        <circle cx="773" cy="539" r="13" style="fill:white;"/>
+        <circle cx="857" cy="612" r="13" style="fill:white;"/>
+        <circle cx="791" cy="650" r="13" style="fill:white;"/>
+        <circle cx="857" cy="730" r="13" style="fill:white;"/>
+        <circle cx="855" cy="831" r="13" style="fill:white;"/>
+    </g>
+    <defs>
+        <linearGradient id="_Linear1" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(824,842,-842,824,100,93)"><stop offset="0" style="stop-color:rgb(38,38,32);stop-opacity:1"/><stop offset="1" style="stop-color:rgb(27,27,23);stop-opacity:1"/></linearGradient>
+        <radialGradient id="_Radial2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(67.5,0,0,67.5,460.5,516)"><stop offset="0" style="stop-color:rgb(225,225,225);stop-opacity:1"/><stop offset="1" style="stop-color:rgb(189,189,189);stop-opacity:1"/></radialGradient>
+    </defs>
+</svg>
