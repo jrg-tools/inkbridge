@@ -668,6 +668,56 @@ WHAT CHANGED FROM THE BRIEF, AND WHY (read this before printing)
     solid, and the same MCU/battery/display insertion-volume probes used
     since point 13 all still read exactly 0mm^3 overlap -- the new walls
     add material without blocking anything else's insertion path.
+
+22. LID BUTTON HOLES ENLARGED TO ONE MERGED OPENING; A DIVIDER ADDED
+    INSIDE THE TRAY TO KEEP THE TWO BUTTONS SEPARATE. Explicit request:
+    "make the holes in the top case bigger, 1.9x1.9cm each" -- which, at
+    this design's fixed SWITCH_PITCH (19.05mm), the request itself
+    predicted would merge the two switches' separate 14x14mm plate holes
+    into one continuous opening (0.05mm would be left between two 19mm
+    squares -- not a real wall). Rather than cut two boxes and hope OCCT
+    cleans up that sliver, build_lid() now cuts ONE rectangle sized to
+    span both button positions -- a single hole by construction (see its
+    comment for the exact box math).
+      With the plate no longer separating the two switches, a follow-up
+    request added a wall INSIDE the tray's switch shelf to do that job
+    instead ("a small divider ... to make the buttons in place"):
+    5mm thick (not arbitrary -- SWITCH_PITCH - SWITCH_HOLE = 5.05mm is the
+    actual free gap between the two switch bodies at this pitch, and 5mm
+    fits it almost exactly), centered on the gap between the switches,
+    half the shelf's inner cavity long so it can't reach the wire
+    pass-through notch on the shelf's near wall (an explicit "don't block
+    the cable hole" constraint), sharp corners (it's a plain Part.makeBox,
+    nothing rounds it). Re-verified with this file's usual tray.common(lid)
+    probe: 0mm^3 overlap against the lid, clean.
+      Height went through two iterations. FIRST built up to the plate
+    plane (screen_wall's own convention for a wall needing full height) --
+    reverted per an immediate "same height as the button box, so the
+    caps can be easily pressed" follow-up: that first version stood
+    ~6.6mm above the shelf rim, right in the open finger/keycap space
+    point 22's merged hole created, an obstacle to actually pressing a
+    button. Now exactly SWITCH_PCB_BELOW_CLEARANCE tall from FLOOR_T --
+    flush with the shelf/button-box top, same z0 and height as the shelf
+    itself -- so it separates the switches through their below-PCB /
+    hot-swap-socket zone without reaching into the space above the PCB.
+      Flagged, not hidden: this wall runs the full height of the shelf's
+    below-PCB clearance zone, meant for socket/pin protrusion, so the
+    real switch PCB needs a matching keepout slot cut into it at this
+    X/Y position to seat flush around the wall -- the same kind of
+    "custom PCB, dimensions not fully specified" caveat this file already
+    carries for the PCB's outline (point 10 / LLM.md), just for one more
+    feature on it.
+      The same request also asked to remove the switch SHELF's own outer
+    corner rounding (switch_shelf_floor_r, build_tray()). Tried and
+    reverted: that radius isn't cosmetic, it's matched to the lid skirt's
+    own swept radius specifically to avoid an overlap at this shelf's far
+    corner -- a bug this file's history already found and fixed once
+    (see the long comment above build_tray()'s switch-shelf section).
+    Sharp corners reintroduced it for real, not hypothetically: the same
+    tray.common(lid) probe measured ~30mm^3 of overlap along that whole
+    edge. Flagged to the user and kept rounded (matched to the skirt) by
+    their choice, once shown the conflict, so the two halves still
+    physically fit together.
 """
 
 import os
@@ -775,6 +825,14 @@ BATTERY_T = 6.3             # HARDWARE.md
 SWITCH_HOLE = 14.0           # STANDARD Cherry MX plate-hole spec (14x14mm), also used as the footprint
 SWITCH_PITCH = 19.05         # STANDARD keyboard key pitch (0.75in), not in HARDWARE.md
 N_SWITCHES = 2
+# LID opening per button, per an explicit "make the holes bigger, 1.9x1.9cm
+# each" request -- docstring point 22. Deliberately separate from
+# SWITCH_HOLE (14mm): SWITCH_HOLE still drives the PCB footprint / plate
+# spec everywhere else in this file, this only enlarges the LID's cutout.
+# At SWITCH_PITCH (19.05mm) two adjacent 19mm squares leave only 0.05mm
+# between their edges -- see build_lid()'s comment for why that's cut as
+# ONE merged rectangle instead of two separate (near-)overlapping boxes.
+LID_BUTTON_HOLE = 19.0
 # Custom hot-swap PCB: LLM.md says its outline "isn't specified -- size
 # its footprint generously and say so." Generous margin beyond the
 # switch bodies for solder pads / socket clearance / routing. Tightened
@@ -885,41 +943,22 @@ MCU_SIDE_WALL_FRACTION = 0.6  # side walls cover only the back 60% of MCU's
                                # USB-C edge so the connector itself is never
                                # pinched and the board still drops in easily
 
-# ---- Screen retention (border wall, same idea as MCU retention above) --
+# ---- Screen retention -------------------------------------------------
 # A lid-side snap tab was tried and rejected: the only Z room available
 # for a tab to hang from the ceiling and flex is STACK_TOP_MARGIN itself
 # (0.5mm), and a beam that short is thousands of times stiffer than the
 # case's own 5.5mm snap skirt (deflection ~ 1/L^3) -- it would just jam
-# or not touch, never spring. So this copies the MCU's own solution
-# instead (a floor-anchored guide wall, tight clearance, no flex) rather
-# than inventing a new mechanism.
+# or not touch, never spring.
 #
-# The screen sits ELEVATED on 4 corner posts (not flat on the floor like
-# the MCU), so its wall can't be a full ring the way MCU's is: the
-# battery occupies the floor-to-BATTERY_TOP_Z space directly under the
-# screen's middle, and a wall spanning the FULL width at floor level
-# would hit it (the same reason corner_posts() is used instead of
-# shelf_frame() for the screen's own vertical support, section 6). The
-# posts themselves prove where it's safe though: they land in the two
-# margin strips beside the battery (roughly x=[0,4] and [61,65] within
-# the stack) that the battery never reaches, at ANY Y -- so a wall
-# stretched along the FULL Y-length of those same two strips, floor to
-# DISPLAY_TOP_Z, never touches the battery either, and (being
-# floor-anchored the whole way up, like the posts) never bridges in
-# mid-air.
-#
-# One of those two strips is redundant, though: the screen's own X0 was
-# already moved flush against the case's real exterior wall (0 clearance,
-# the sturdiest possible constraint) in the previous change, so only the
-# OTHER long edge (the one facing the switch column across ROW_GAP) is
-# still just resting loosely on 4 small posts with nothing stopping it
-# sliding sideways. That's the one edge this wall actually needs to
-# cover. SCREEN_RETENTION_CLEARANCE matches MCU_RETENTION_CLEARANCE
-# (0.15mm) -- same reasoning: tight enough to kill the slop, loose enough
-# the board still drops in from above without binding.
+# A floor-anchored guide wall along the screen's far (+X) edge (the one
+# facing the switch column, mirroring MCU's own retention wall) was built
+# here for a while, closing off the one long edge that wasn't already
+# flush against the case's exterior wall (SCREEN_X0==0). It was REMOVED
+# per an explicit request ("remove the horizontal wall you had for the
+# screen between the 2 towers closer to the buttons") -- see build_tray()
+# for where it used to be fused in. The screen's +X edge now has only its
+# 2 corner posts for lateral support on that side, nothing between them.
 DISPLAY_POST_SIZE = 4.0
-SCREEN_RETENTION_CLEARANCE = 0.15
-SCREEN_SIDE_WALL_T = 1.5
 
 # ---- Snap-fit geometry (see snap_fit_strain() for the math) ----------
 # Shrunk from an earlier pass (L=6.0, band=1.6) per a "make the snap
@@ -1110,9 +1149,24 @@ MCU_Y0 = BATTERY_Y0 - 2.0  # pulled 4mm closer to the -Y wall (was +2.0) -- prin
 #   + STACK_TOP_MARGIN                  clearance to the plate
 #   = INTERNAL_CAVITY_H                 lid's inner (plate) face
 #
-MCU_TOP_Z = MCU_SHELF_CLEARANCE + MCU_THICKNESS       # = battery's support-post height
-BATTERY_TOP_Z = MCU_TOP_Z + BATTERY_SHELF_CLEARANCE + BATTERY_T  # = display's support-post height
-DISPLAY_TOP_Z = BATTERY_TOP_Z + DISPLAY_THICKNESS
+MCU_TOP_Z = MCU_SHELF_CLEARANCE + MCU_THICKNESS       # = MCU's own physical top
+
+# Battery and display support-post heights, each grown 5mm taller than the
+# component they stand on requires, per an explicit "make the towers for
+# the battery and screen 5mm taller" request -- pure extra standoff air gap
+# on top of the plain resting height each pair already used, not tied to
+# any component's real thickness. The two are stacked (display posts start
+# from BATTERY_TOP_Z, which already includes the battery tower's own extra
+# 5mm), so the case grows by their SUM, 10mm, not 5mm -- flows straight
+# through BATTERY_TOP_Z/DISPLAY_TOP_Z/INTERNAL_CAVITY_H/EXTERNAL_H below,
+# same as every other height-driving change in this file.
+BATTERY_TOWER_EXTRA_H = 5.0
+DISPLAY_TOWER_EXTRA_H = 5.0
+
+BATTERY_POST_H = MCU_TOP_Z + BATTERY_TOWER_EXTRA_H    # = battery's support-post height
+BATTERY_TOP_Z = BATTERY_POST_H + BATTERY_SHELF_CLEARANCE + BATTERY_T  # = battery's own physical top
+DISPLAY_POST_H = BATTERY_TOP_Z + DISPLAY_TOWER_EXTRA_H  # = display's support-post height
+DISPLAY_TOP_Z = DISPLAY_POST_H + DISPLAY_THICKNESS
 STACK_TOP_MARGIN = 0.5  # deliberately tight -- see docstring point 11
 INTERNAL_CAVITY_H = DISPLAY_TOP_Z + STACK_TOP_MARGIN
 
@@ -1577,7 +1631,8 @@ def build_tray():
     tray = tray.fuse(left_side_wall)
     tray = tray.fuse(right_side_wall)
 
-    # Battery: 4 corner posts rising to MCU_TOP_Z, ABOVE the MCU.
+    # Battery: 4 corner posts rising to BATTERY_POST_H (MCU_TOP_Z plus the
+    # 5mm BATTERY_TOWER_EXTRA_H standoff, section 5), ABOVE the MCU.
     # Positioned at the battery's OWN footprint corners -- since MCU
     # (17.5x21mm) is much smaller than the battery (51x34.5mm) and
     # centered within it in X, the battery's corners land >=8.5mm clear
@@ -1588,22 +1643,23 @@ def build_tray():
     BATTERY_POST_SIZE = 4.0
     tray = tray.fuse(corner_posts(
         BATTERY_W + 2 * FIT_CLEARANCE_XY, BATTERY_D + 2 * FIT_CLEARANCE_XY,
-        BATTERY_POST_SIZE, MCU_TOP_Z, FLOOR_T,
+        BATTERY_POST_SIZE, BATTERY_POST_H, FLOOR_T,
         (WALL_T + BATTERY_X0 - FIT_CLEARANCE_XY, WALL_T + BATTERY_Y0 - FIT_CLEARANCE_XY)))
 
-    # Display: 4 corner posts rising to BATTERY_TOP_Z, ABOVE the battery.
+    # Display: 4 corner posts rising to DISPLAY_POST_H (BATTERY_TOP_Z plus
+    # the 5mm DISPLAY_TOWER_EXTRA_H standoff, section 5), ABOVE the battery.
     # Positioned at the display's OWN footprint corners, which -- because
     # the display (65mm) is wider than the battery (51mm) -- land in the
     # margin strips beside the battery, clearing it entirely (verified:
     # display corners at roughly x=[0,4] and [61,65] within the stack,
     # battery spans x=[7,58]).
     #
-    # BATTERY_TOP_Z (14.3mm global here) is TALLER than TRAY_EXTERNAL_H
-    # (the seam, 10.4mm) -- these posts necessarily rise past the seam
-    # into territory that belongs to the LID above it. That's fine in
-    # principle, but the lid occupies that near-wall band in TWO different
-    # ways depending on Z, and a post has to clear BOTH:
-    #   - Below the seam (global Z 4.9-10.4 here): this is where the lid's
+    # DISPLAY_POST_H is TALLER than TRAY_EXTERNAL_H (the seam) -- these
+    # posts necessarily rise past the seam into territory that belongs to
+    # the LID above it. That's fine in principle, but the lid occupies
+    # that near-wall band in TWO different ways depending on Z, and a
+    # post has to clear BOTH:
+    #   - Below the seam: this is where the lid's
     #     own SNAP_SKIRT_T-thick skirt nests into the tray's cavity for the
     #     snap engagement (build_lid()) -- a solid ring occupying
     #     [WALL_T+SKIRT_CLEARANCE, WALL_T+SKIRT_CLEARANCE+SNAP_SKIRT_T]
@@ -1629,28 +1685,20 @@ def build_tray():
     display_post_x1 = WALL_T + SCREEN_X0 + SCREEN_W + FIT_CLEARANCE_XY
     tray = tray.fuse(corner_posts(
         display_post_x1 - display_post_x0, SCREEN_L + 2 * FIT_CLEARANCE_XY,
-        DISPLAY_POST_SIZE, BATTERY_TOP_Z, FLOOR_T,
+        DISPLAY_POST_SIZE, DISPLAY_POST_H, FLOOR_T,
         (display_post_x0, WALL_T + SCREEN_Y0 - FIT_CLEARANCE_XY)))
 
-    # Screen retention: a single floor-anchored guide wall along the
-    # screen's far (+X) edge -- see the SCREEN_RETENTION_CLEARANCE /
-    # SCREEN_SIDE_WALL_T comment (section 2) for why this is one wall,
-    # not a ring, and why it's safe from the battery underneath. The near
-    # (X=0) edge already touches the case's own exterior wall (previous
-    # change), so it needs nothing extra; this covers the one edge that
-    # was still just resting loosely on 4 small posts. Runs the FULL
-    # screen depth (matching the display corner posts' own Y-span, so it
-    # fuses into one continuous piece with the two posts on this side
-    # rather than butting against them), floor to DISPLAY_TOP_Z -- tall
-    # enough to actually run alongside the board's own thickness, not
-    # just up to where it rests.
-    screen_wall_x0 = WALL_T + SCREEN_X0 + SCREEN_W + SCREEN_RETENTION_CLEARANCE
-    screen_wall_y0 = WALL_T + SCREEN_Y0 - FIT_CLEARANCE_XY
-    screen_wall_d = SCREEN_L + 2 * FIT_CLEARANCE_XY
-    tray = tray.fuse(Part.makeBox(
-        SCREEN_SIDE_WALL_T, screen_wall_d, DISPLAY_TOP_Z,
-        Vector(screen_wall_x0, screen_wall_y0, FLOOR_T)))
-
+    # Screen retention wall along the screen's far (+X) edge -- the one
+    # facing the switch column across ROW_GAP, bridging the two display
+    # corner posts closest to the switches -- REMOVED per an explicit
+    # "remove the horizontal wall you had for the screen between the 2
+    # towers closer to the buttons" request. The near (X=0) edge still
+    # needs nothing extra (it already touches the case's own exterior
+    # wall). Trade-off, flagged rather than silently dropped: the screen's
+    # +X edge now relies on the 2 corner posts on that side alone for
+    # lateral retention, with nothing between them -- more slop against
+    # sideways sliding on that edge than before, not eliminated.
+    #
     # Switch column: shelf_frame as in every previous revision, on the
     # SWITCH_COL_W x SWITCH_COL_L footprint beside the stack. Its shelf
     # height (SWITCH_PCB_BELOW_CLEARANCE) is now DERIVED (section 5) and
@@ -1671,6 +1719,16 @@ def build_tray():
     # shelf's far corner, not a vague "something's off"). Matching the
     # radii removes the conflict at its source instead of just adding
     # clearance margin and hoping.
+    # Point 22 asked to also remove this shelf's outer corner rounding
+    # (the "internal button box", alongside the new divider below). Tried
+    # (floor_r=0.0) and reverted: that radius isn't cosmetic -- it exists
+    # specifically to clear the lid skirt at this shelf's far corner (see
+    # the long comment above this function for that bug's original story),
+    # and sharp corners reintroduce it for real: the same tray.common(lid)
+    # probe used throughout this file measured ~30mm^3 of actual overlap
+    # along that whole edge, not a rounding error. Kept matched to the
+    # skirt's own radius per the user's explicit choice, once shown the
+    # conflict, to keep the two halves fitting together.
     SWITCH_SHELF_RIM_W = 2.0
     switch_shelf_floor_r = max(CORNER_FILLET_OUTER - WALL_T - SKIRT_CLEARANCE, 0.1)
     tray = tray.fuse(shelf_frame(
@@ -1696,6 +1754,61 @@ def build_tray():
         wire_notch_depth, wire_notch_w, wire_notch_h,
         Vector(wire_notch_x0, wire_notch_y0, wire_notch_z0))
     tray = tray.cut(wire_cutter)
+
+    # Button divider: the lid's plate hole over these two switches used to
+    # be two separate 14x14mm holes, which kept the buttons visually and
+    # physically apart on their own. Point 22 merges that into one big
+    # opening (build_lid()'s comment), so nothing up top separates the two
+    # switches anymore -- this wall, standing inside the switch shelf,
+    # replaces that job. Per an explicit request:
+    #   - 5mm thick (Y direction, the axis the switches are stacked on).
+    #     Not a chosen number: SWITCH_PITCH - SWITCH_HOLE = 19.05 - 14 =
+    #     5.05mm is the actual free gap between the two switch bodies at
+    #     this pitch/footprint, and 5mm fits it almost exactly.
+    #   - Centered on the shelf's own Y-midpoint -- the same midpoint
+    #     wire_notch_y0 above is centered on, i.e. the gap between the two
+    #     switches.
+    #   - Half the shelf's INNER cavity width (X direction) long, per an
+    #     explicit "1/2 of the length of the box" request, anchored to the
+    #     shelf's far (+X) inner wall and stopping at the cavity's own
+    #     midpoint -- deliberately short of the near (-X) inner wall, where
+    #     wire_cutter (just above) punches through, so this wall can't
+    #     block that cable path. Confirmed clear of it in X: wire_cutter's
+    #     far edge sits only ~1mm past the near inner wall, this wall's
+    #     near edge starts at the cavity's own midpoint, several mm beyond
+    #     that.
+    #   - Sharp corners (no fillet), matching the shelf's own corners just
+    #     above.
+    # Z-range: floor to SWITCH_PCB_BELOW_CLEARANCE -- i.e. exactly as tall
+    # as the shelf/button box itself (their outer boxes share the same z0
+    # AND height), not up to the plate plane. FIRST built taller (up to
+    # the plate plane, matching screen_wall's convention for a wall that
+    # needs to reach all the way up) but that put its top ~6.6mm above the
+    # shelf rim -- right where the switch caps themselves are, an obstacle
+    # between a fingertip and the button per an explicit "make the buttons
+    # easily pressable" follow-up. Flush with the shelf top instead: still
+    # separates the two switches through their entire below-PCB /
+    # hot-swap-socket zone (the only zone this wall can occupy without
+    # colliding with the PCB itself -- see the keepout-slot note below),
+    # just without poking up into the open finger/keycap space above the
+    # PCB that point 22's merged hole created.
+    # ASSUMPTION carried over from before: the actual switch PCB needs a
+    # matching keepout slot cut into it at this X/Y position so it can
+    # still seat flush on the shelf rim around this wall. Flagged, not
+    # silently assumed away -- verify against the real PCB layout before
+    # printing, same as every other "custom hot-swap PCB" dimension in
+    # this file (see docstring point 10 / LLM.md).
+    BUTTON_DIVIDER_T = 5.0
+    switch_inner_w = (SWITCH_COL_W + 2 * FIT_CLEARANCE_XY) - 2 * SWITCH_SHELF_RIM_W
+    switch_inner_x0 = WALL_T + SWITCH_COL_X0 - FIT_CLEARANCE_XY + SWITCH_SHELF_RIM_W
+    divider_len = switch_inner_w / 2.0
+    divider_x0 = switch_inner_x0 + switch_inner_w - divider_len
+    divider_y_mid = WALL_T + SWITCH_COL_Y0 + SWITCH_COL_L / 2.0
+    divider_y0 = divider_y_mid - BUTTON_DIVIDER_T / 2.0
+    divider_h = SWITCH_PCB_BELOW_CLEARANCE
+    divider = Part.makeBox(divider_len, BUTTON_DIVIDER_T, divider_h,
+                            Vector(divider_x0, divider_y0, FLOOR_T))
+    tray = tray.fuse(divider)
 
     # USB-C notch through the -Y wall (the top of the case, the screen
     # row's own exterior-facing edge -- MCU is rotated so its USB-C short
@@ -1861,7 +1974,14 @@ def build_lid():
     HOLE_W, HOLE_D = 50.0, 25.0
     win_w = HOLE_W
     win_d = HOLE_D
-    win_x = WALL_T + SCREEN_X0 + (SCREEN_W - win_w) / 2.0
+    # Shifted 2mm off-center along X per an explicit request: closer to the
+    # case's exterior wall (SCREEN_X0==0, the screen module's own flush
+    # edge, section 4) and correspondingly farther from the switch column,
+    # which sits on the opposite (+X) side of the same axis -- both of
+    # those are satisfied by the same single move, since edge and buttons
+    # are the two ends of this one axis, not independent directions.
+    WINDOW_X_SHIFT = 2.0
+    win_x = WALL_T + SCREEN_X0 + (SCREEN_W - win_w) / 2.0 - WINDOW_X_SHIFT
     win_y = WALL_T + SCREEN_Y0 + (SCREEN_L - win_d) / 2.0
     # Rounded corners (WINDOW_CORNER_R) and a beveled top rim
     # (WINDOW_EDGE_CHAMFER_STAGES) -- the same "flat cut is sharp, curve
@@ -1920,17 +2040,89 @@ def build_lid():
     screen_lip = lip_outer.cut(lip_inner)
     lid = lid.fuse(screen_lip)
 
-    # Switch plate holes: standard 14x14mm, through the ceiling. The
-    # switches are stacked along Y now (portrait layout), so the loop
-    # walks Y at the switch pitch instead of X.
+    # Screen retention WALL: a proper vertical ring around the display
+    # module's own footprint, added on the LID's interior (hanging from
+    # the ceiling down into the hollow cap-wall cavity) per an explicit
+    # "add a retention wall around the screen module" request -- this is
+    # a taller, structural version of what the shallow lip above can't be:
+    # the lip's depth is capped at STACK_TOP_MARGIN (a fraction of a mm)
+    # because going any deeper there would cut into the module's own
+    # physical body (the lip's inner hole is window-sized, much smaller
+    # than the module footprint). This wall instead uses lip_w/lip_d --
+    # the SAME footprint the tray's 4 corner posts already use below -- as
+    # its INNER opening, so the module still drops through with the exact
+    # clearance it always had; the wall material sits OUTSIDE that
+    # boundary, in room that's genuinely free on 3 sides (Y top/bottom
+    # have several mm of margin; the +X side facing the switch column has
+    # ROW_GAP to spare). The near/-X edge needs nothing extra -- lip_x0
+    # already overlaps into the case's own WALL_T exterior wall there
+    # (see build_tray()'s display-post-clamp comment), so this ring's -X
+    # segment just fuses harmlessly into that existing solid wall.
+    #
+    # Z-range: from just above where the tray's own display corner posts
+    # end (DISPLAY_POST_H, plus SCREEN_WALL_POST_CLEARANCE of assembly-
+    # tolerance headroom) up to the ceiling. The posts never reach into
+    # that band, so unlike a wall built on the TRAY side (which would
+    # have to dodge the posts' own footprint at the corners), there's no
+    # cross-part collision to design around here at all -- unused Z
+    # territory that opened up once the tower-height change (this
+    # session) pushed the display well clear of the seam.
+    SCREEN_WALL_T = 1.5
+    SCREEN_WALL_POST_CLEARANCE = 0.3
+    SCREEN_RETENTION_WALL_H = (EXTERNAL_H - CEIL_T) - (FLOOR_T + DISPLAY_POST_H + SCREEN_WALL_POST_CLEARANCE)
+    assert SCREEN_RETENTION_WALL_H > 0, (
+        "no room for a screen retention wall above the display's corner posts -- "
+        "raise DISPLAY_TOWER_EXTRA_H/STACK_TOP_MARGIN or tighten SCREEN_WALL_POST_CLEARANCE")
+    screen_wall_z0 = LID_EXTERNAL_H - CEIL_T - SCREEN_RETENTION_WALL_H
+    screen_wall_outer = rounded_box(
+        lip_w + 2 * SCREEN_WALL_T, lip_d + 2 * SCREEN_WALL_T, SCREEN_RETENTION_WALL_H, 1.0,
+        Vector(lip_x0 - SCREEN_WALL_T, lip_y0 - SCREEN_WALL_T, screen_wall_z0))
+    screen_wall_inner = Part.makeBox(
+        lip_w, lip_d, SCREEN_RETENTION_WALL_H + 2, Vector(lip_x0, lip_y0, screen_wall_z0 - 1))
+    screen_wall = screen_wall_outer.cut(screen_wall_inner)
+
+    # Gap in the +X segment (the one facing the switch column, closer to
+    # the buttons), per an explicit "remove 1.5cm in the middle" request.
+    # Centered on that segment's own Y-midpoint, full wall thickness and
+    # full height, so it opens a clean through-gap rather than a pocket.
+    # NOTE: this segment's real length is lip_d (SCREEN_L+2*FIT_CLEARANCE_XY
+    # = 30.6mm at this file's current constants), not the ~25mm (5+15+5)
+    # implied by the request's own "around 5mm each side" estimate -- a
+    # centered 15mm cut actually leaves ~7.8mm on each side, not 5mm.
+    # Sized to the explicit 15mm figure (the more specific of the two
+    # numbers given) rather than silently resizing the cut to force
+    # exactly 5mm remainders; adjust SCREEN_WALL_BUTTON_NOTCH_W below if
+    # 5mm on each side was actually the firmer requirement.
+    SCREEN_WALL_BUTTON_NOTCH_W = 15.0
+    notch_y0 = lip_y0 + lip_d / 2.0 - SCREEN_WALL_BUTTON_NOTCH_W / 2.0
+    notch_x0 = lip_x0 + lip_w - 0.5  # 0.5mm overshoot on each side for a clean through-cut
+    notch_cutter = Part.makeBox(
+        SCREEN_WALL_T + 1.0, SCREEN_WALL_BUTTON_NOTCH_W, SCREEN_RETENTION_WALL_H + 2,
+        Vector(notch_x0, notch_y0, screen_wall_z0 - 1))
+    screen_wall = screen_wall.cut(notch_cutter)
+    lid = lid.fuse(screen_wall)
+
+    # Switch plate holes: previously N_SWITCHES independent 14x14mm holes
+    # (standard Cherry MX plate spec), one per switch. Per an explicit
+    # "make the holes bigger, 1.9x1.9cm each" request (docstring point 22)
+    # each button's opening grows to LID_BUTTON_HOLE (19mm) square -- at
+    # the fixed SWITCH_PITCH (19.05mm) that leaves only 0.05mm between two
+    # adjacent squares' edges, which the request itself calls out as
+    # "provably ... just 1 hole for both buttons". Rather than cut
+    # N_SWITCHES separate boxes and rely on OCCT to fuse a 0.05mm sliver
+    # cleanly out of the mesh, this cuts ONE rectangle sized to span every
+    # button position -- a single hole by construction, not an accident of
+    # near-overlap. The switches are stacked along Y (portrait layout), so
+    # the merge is along Y; X width is just LID_BUTTON_HOLE.
     sw_cx = WALL_T + SWITCH_COL_X0 + SWITCH_COL_W / 2.0
     first_cy = WALL_T + SWITCH_COL_Y0 + SWITCH_PCB_MARGIN_X + SWITCH_HOLE / 2.0
-    for i in range(N_SWITCHES):
-        cy = first_cy + i * SWITCH_PITCH
-        hole = Part.makeBox(SWITCH_HOLE, SWITCH_HOLE, CEIL_T + 2,
-                             Vector(sw_cx - SWITCH_HOLE / 2.0, cy - SWITCH_HOLE / 2.0,
-                                    LID_EXTERNAL_H - CEIL_T - 1))
-        lid = lid.cut(hole)
+    last_cy = first_cy + (N_SWITCHES - 1) * SWITCH_PITCH
+    hole_y0 = first_cy - LID_BUTTON_HOLE / 2.0
+    hole_span_y = (last_cy - first_cy) + LID_BUTTON_HOLE
+    hole = Part.makeBox(LID_BUTTON_HOLE, hole_span_y, CEIL_T + 2,
+                         Vector(sw_cx - LID_BUTTON_HOLE / 2.0, hole_y0,
+                                LID_EXTERNAL_H - CEIL_T - 1))
+    lid = lid.cut(hole)
 
     # USB-C notch (on the -Y wall, see build_tray()): matches the tray's
     # notch in X/Y so the opening is continuous across whichever part(s)
@@ -2018,9 +2210,11 @@ def print_summary():
     print("-- Height (Z) budget, from tray floor top -- set by the stack, not the switches --")
     print("Internal cavity height (= PCB-to-plate stack): %.2f mm" % INTERNAL_CAVITY_H)
     print("  MCU shelf clearance     : %.2f mm" % MCU_SHELF_CLEARANCE)
-    print("  MCU thickness           : %.2f mm  -> MCU top / battery post height at Z=%.2f" % (MCU_THICKNESS, MCU_TOP_Z))
+    print("  MCU thickness           : %.2f mm  -> MCU top at Z=%.2f" % (MCU_THICKNESS, MCU_TOP_Z))
+    print("  battery tower extra     : %.2f mm  -> battery post height at Z=%.2f" % (BATTERY_TOWER_EXTRA_H, BATTERY_POST_H))
     print("  battery post clearance  : %.2f mm" % BATTERY_SHELF_CLEARANCE)
-    print("  battery thickness       : %.2f mm  -> battery top / display post height at Z=%.2f" % (BATTERY_T, BATTERY_TOP_Z))
+    print("  battery thickness       : %.2f mm  -> battery top at Z=%.2f" % (BATTERY_T, BATTERY_TOP_Z))
+    print("  display tower extra     : %.2f mm  -> display post height at Z=%.2f" % (DISPLAY_TOWER_EXTRA_H, DISPLAY_POST_H))
     print("  display thickness       : %.2f mm  -> display top at Z=%.2f" % (DISPLAY_THICKNESS, DISPLAY_TOP_Z))
     print("  -> margin below plate: %.2f mm (deliberately tight -- see docstring point 11)" % STACK_TOP_MARGIN)
     print("Switch PCB shelf (derived to keep the %.1fmm plate gap correct at this height): %.2f mm" % (
