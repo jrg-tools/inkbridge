@@ -43,24 +43,28 @@ for iterating on constants).
 DESIGN OVERVIEW
 ====================================================================
 
-LAYOUT: a single row holds a Z-stack (MCU on the tray floor, battery
-directly above it, e-ink display above the battery, all sharing one XY
-footprint) beside a vertical column of the 2 switches. Stacking the
-three components in Z instead of laying them out in the plan view is
-what keeps the footprint small; the switch column is the only thing that
-actually sits beside the stack in X/Y.
+LAYOUT: a single row, floor to floor: battery, then the MCU, then the
+switch column, all sitting side by side in the plan view (not stacked in
+Z) -- the battery and MCU zones share their dividing wall since they sit
+flush against each other. The e-ink display is the only thing still
+stacked in Z: it's adhesive-mounted above the battery+MCU row, spanning
+both of their footprints, at DISPLAY_REST_Z (section 5). Only the display
+trades case height for a smaller footprint now; the battery and MCU no
+longer do.
 
 SUPPORT: the MCU rests on a floor-level shelf pocket (shelf_frame()) with
 open air below it for solder joints, plus a U-shaped retention wall on 3
 sides (open at the USB-C edge) so a charging plug pushes against a
-floor-anchored wall instead of relying on friction alone. The battery and
-display have NO posts, shelves, or walls holding them up in the tray --
-each is adhesive/tape-mounted directly on top of the component below it,
-at the Z-height the layout reserves for it (BATTERY_REST_Z /
-DISPLAY_REST_Z, section 5). Nothing in the printed tray registers the
-battery's position at all. The display additionally gets a full
-lateral-confinement ring molded into the LID (screen_lip + screen_wall in
-build_lid()), open only on the segment facing the switch column.
+floor-anchored wall instead of relying on friction alone. The battery
+sits directly on the tray floor (no shelf -- it's a solid cell, nothing
+needs clearance beneath it) with a single retention wall between it and
+the MCU (the wall the two zones share) so it can't slide sideways. The
+display has NO posts, shelves, or walls holding it up in the tray at all
+-- it's adhesive/tape-mounted directly on top of the battery+MCU row, at
+DISPLAY_REST_Z (section 5); nothing in the printed tray registers the
+display's position. It additionally gets a full lateral-confinement ring
+molded into the LID (screen_lip + screen_wall in build_lid()), open only
+on the segment facing the switch column.
 
 SWITCHES: mounted "plate style" -- PCB, a 5mm air gap, then a 14x14mm hole
 in the lid's own outer face that the switch upper housing pokes through
@@ -176,11 +180,6 @@ MCU_THICKNESS = 4.0
 # Ordinary solder-joint clearance under the MCU board, sitting on its own
 # floor-level shelf (shelf_frame(), build_tray()).
 MCU_SHELF_CLEARANCE = 1.0
-# Air gap reserved above the battery's resting height (BATTERY_REST_Z,
-# section 5) before the battery's own body starts -- assembly tolerance /
-# adhesive-layer thickness, since the battery has no post or shelf to
-# rest on (see the module docstring's SUPPORT note).
-BATTERY_SHELF_CLEARANCE = 1.0
 USB_C_CUTOUT_W = 9.0       # ASSUMPTION: ~10x6mm opening, typical USB-C receptacle
 USB_C_CUTOUT_H = 3.0
 # ASSUMPTION: connector height above the board's bottom face -- typical
@@ -189,9 +188,22 @@ USB_C_CUTOUT_H = 3.0
 # margin built in (see USB_C_CUTOUT_H) to absorb a modest error here.
 USB_C_CENTER_Z_ABOVE_SHELF = 3.0
 
+# microSD slot (the Sense expansion board's card reader): a wall opening
+# so a card can be slid in/out without opening the case, on the same -Y
+# wall as the USB-C port, positioned per the design brief -- 3mm above
+# the USB-C notch's own top edge (MICROSD_GAP_ABOVE_USBC, section 5).
+# ASSUMPTION: neither the slot's exact board-relative position nor its
+# opening size is in HARDWARE.md. Sized for a standard microSD card
+# (11 x 1.0mm cross-section, inserted edge-first) plus clearance for the
+# card and its holder mechanism -- VERIFY against the physical board
+# before printing, same as the USB-C figures above.
+MICROSD_SLOT_W = 12.0       # ASSUMPTION: 11mm card width + slide clearance
+MICROSD_SLOT_H = 2.0        # ASSUMPTION: ~1mm card thickness + holder/clearance margin
+MICROSD_GAP_ABOVE_USBC = 3.0  # per design brief: slot sits 3mm above the USB-C notch's top
+
 # ---- Battery: EEMB 603449 -------------------------------------------
-BATTERY_W = 51.0            # HARDWARE.md
-BATTERY_D = 34.5            # HARDWARE.md
+BATTERY_W = 48.0            # measured on the physical cell (overrides HARDWARE.md's 51mm datasheet figure)
+BATTERY_D = 34.0            # measured on the physical cell (overrides HARDWARE.md's 34.5mm datasheet figure)
 BATTERY_T = 6.3             # HARDWARE.md
 
 # ---- Switches: 2x Cherry MX2A Silent Blue on a hot-swap PCB ----------
@@ -288,19 +300,30 @@ MCU_SIDE_WALL_FRACTION = 0.6  # side walls cover only the back 60% of MCU's
                                # USB-C edge so the connector itself is never
                                # pinched and the board still drops in easily
 
+# ---- Battery retention --------------------------------------------------
+# The battery sits directly on the tray floor next to the MCU (not
+# adhesive-stacked on top of it anymore, see section 4's layout), so it
+# needs its own in-plane retention the same way the MCU does. A single
+# wall between the battery and MCU zones does the job -- the two zones
+# sit flush against each other, so this one wall is both the battery's
+# retention and the MCU zone's own boundary on that side, rather than
+# each getting a separate wall (they "share the same wall" per the
+# layout brief). A cable notch through it lets the battery's power leads
+# reach the MCU, same idea as the switch column's wire_notch
+# (build_tray()).
+BATTERY_WALL_T = 2.0
+
 # ---- Screen retention -------------------------------------------------
 # No lid-side snap tab: the only Z room available for a tab to hang from
 # the ceiling and flex is STACK_TOP_MARGIN (0.5mm), and a beam that short
 # is thousands of times stiffer than the case's own 5.5mm snap skirt
 # (deflection ~ 1/L^3) -- it would jam or not touch, never spring.
 #
-# The battery and display have no posts, shelves, or walls in the TRAY at
-# all (see the module docstring's SUPPORT note) -- each is adhesive/tape-
-# mounted directly on top of the component below it. The display's only
-# retention is on the LID side: screen_lip and screen_wall (build_lid())
-# form a ring around its perimeter, open only on the segment facing the
-# switch column. The battery has no retention structure anywhere; it
-# relies entirely on the adhesive itself.
+# The display has no posts, shelves, or walls in the TRAY at all (see the
+# module docstring's SUPPORT note) -- it's adhesive/tape-mounted directly
+# on top of the battery+MCU row. Its only retention is on the LID side:
+# screen_lip and screen_wall (build_lid()) form a ring around its
+# perimeter, open only on the segment facing the switch column.
 
 # ---- Snap-fit geometry (see snap_fit_strain() for the math) ----------
 # d (SNAP_INTERFERENCE) must clear 2*SKIRT_CLEARANCE with real margin: at
@@ -327,32 +350,35 @@ SNAP_BEAD_BAND_H = 1.2      # height of the bead/groove band along the wall (mm)
 BEAD_CHAMFER_SIZE = 0.2
 
 # ====================================================================
-# 4. DERIVED LAYOUT (plan view) -- SINGLE ROW: FULL 3-LAYER Z-STACK
-#    BESIDE THE SWITCHES.
+# 4. DERIVED LAYOUT (plan view) -- SINGLE ROW, FLOOR TO FLOOR: BATTERY,
+#    MCU, SWITCH COLUMN, LEFT TO RIGHT. ONLY THE SCREEN IS STILL
+#    Z-STACKED, ABOVE THE BATTERY+MCU ROW.
 #
 #    +---+------------------------+
-#    |sw1|                        |   The "STACK" is MCU + battery +
-#    +---+       SCREEN            |   display, all in the SAME XY
-#    |sw2|  (MCU on the floor,    |   footprint at different Z heights
-#    |   |   battery + display     |   (see section 5) -- footprint is
-#    |   |   adhesive-stacked)     |   fixed, trading case height for a
-#    +---+------------------------+   smaller footprint.
+#    |sw1|                        |   The battery and MCU sit side by
+#    +---+       SCREEN            |   side on the tray floor (sharing
+#    |sw2|  (battery + MCU on     |   their dividing wall), with the
+#    |   |   the floor, screen     |   screen adhesive-stacked above
+#    |   |   adhesive-stacked      |   both of them (see section 5) --
+#    |   |   above both)           |   only the screen trades case
+#    +---+------------------------+   height for footprint now.
 # ====================================================================
 
 SCREEN_W, SCREEN_L = DISPLAY_MODULE_W, DISPLAY_MODULE_D  # 65 x 30, landscape
-# The stack's footprint is the bounding box of its widest/deepest member:
-# display is wider (65 vs battery's 51), battery is deeper (34.5 vs
-# display's 30) -- so the stack "sees" a 65 x 34.5 footprint overall, with
-# each component centered within it at its own Z layer.
-STACK_W = max(SCREEN_W, BATTERY_W)
-STACK_D = max(SCREEN_L, BATTERY_D)
 
 # Switch column: reuse the switch-PCB footprint from section 2, pitch
 # direction along Y (stacked vertically, narrow width) so it adds as
-# little width as possible next to the stack.
+# little width as possible next to the row.
 SWITCH_COL_W, SWITCH_COL_L = SWITCH_PCB_D, SWITCH_PCB_W
 
-CONTENT_W = STACK_W + ROW_GAP + SWITCH_COL_W
+# Battery + MCU row: battery, the shared retention wall, then the MCU --
+# all side by side along X. Row depth is the bounding box of whichever
+# member is deepest (screen sits above the whole row, so it's included
+# too even though it isn't part of the row itself).
+STACK_ROW_W = BATTERY_W + BATTERY_WALL_T + MCU_D
+STACK_D = max(SCREEN_L, BATTERY_D, MCU_W)
+
+CONTENT_W = STACK_ROW_W + ROW_GAP + SWITCH_COL_W
 CONTENT_D = max(STACK_D, SWITCH_COL_L)
 
 INTERNAL_W = CONTENT_W + 2 * BORDER
@@ -361,75 +387,77 @@ INTERNAL_D = CONTENT_D + 2 * BORDER
 EXTERNAL_W = INTERNAL_W + 2 * WALL_T
 EXTERNAL_D = INTERNAL_D + 2 * WALL_T
 
-# Stack column (local internal coordinates):
+# Battery + MCU row (local internal coordinates):
 STACK_X0 = BORDER
 STACK_Y0 = BORDER + (CONTENT_D - STACK_D) / 2.0  # centered if switches are taller
-# Flush against the far interior wall (the one opposite the switch
-# column, away from ROW_GAP) instead of centered with STACK_X0's own
-# BORDER gap -- SCREEN_W == STACK_W (the screen is the widest stack
-# member) so this doesn't disturb the battery/MCU, which are centered
-# off STACK_X0, not SCREEN_X0.
+
+# Screen: flush against the far interior wall (the one opposite the
+# switch column, away from ROW_GAP), same as the row itself -- centered
+# in Y within the row's own band. SCREEN_W (65) is wider than the
+# battery alone (51) so the screen overlaps most of the MCU's footprint
+# too, which is the point: it's meant to sit over both.
 SCREEN_X0 = 0.0
 SCREEN_Y0 = STACK_Y0 + (STACK_D - SCREEN_L) / 2.0
-BATTERY_X0 = STACK_X0 + (STACK_W - BATTERY_W) / 2.0
+
+# Battery: flush against the row's own -X edge (the case's far interior
+# wall), centered in Y within the row's band.
+BATTERY_X0 = STACK_X0
 BATTERY_Y0 = STACK_Y0 + (STACK_D - BATTERY_D) / 2.0
 
-# Switch column, beside the stack:
-SWITCH_COL_X0 = STACK_X0 + STACK_W + ROW_GAP
+# Switch column, beside the row:
+SWITCH_COL_X0 = STACK_X0 + STACK_ROW_W + ROW_GAP
 SWITCH_COL_Y0 = BORDER + (CONTENT_D - SWITCH_COL_L) / 2.0
 
-# MCU: at the bottom of the stack, under the battery. Centered in X
-# within the BATTERY's own footprint (not the screen's) so the battery,
-# adhesive-mounted directly on top of it, has even support on both sides.
-# Offset toward the battery's own -Y edge (matching the stack's -Y edge)
-# so the MCU's USB-C short edge sits close to the case's -Y (top) wall.
-# Long axis (21mm, MCU_W) runs along Y.
-MCU_X0 = BATTERY_X0 + (BATTERY_W - MCU_D) / 2.0  # centered in X (uses MCU's short side, 17.5mm)
-MCU_Y0 = BATTERY_Y0 - 2.0  # offset toward the -Y wall, minimal gap to it
+# MCU: beside the battery, across their shared retention wall (X extent
+# is MCU's short/USB-C edge, MCU_D; long axis MCU_W runs along Y). Flush
+# with the row's own -Y edge so the MCU's USB-C short edge sits close to
+# the case's -Y (top) wall -- same reasoning as the old Z-stacked layout,
+# just applied in-plane now instead of offset in Y from the battery.
+MCU_X0 = BATTERY_X0 + BATTERY_W + BATTERY_WALL_T
+MCU_Y0 = STACK_Y0
 
 # ====================================================================
 # 5. DERIVED Z STACK
 # ====================================================================
 #
-# Internal cavity height is set by the battery-MCU-display stack, not by
-# the switch's plate-mount geometry: the stack needs more height than the
-# switches ever do, so the cavity height is set by the stack, and the
-# switch PCB's own shelf is derived (raised) to keep its plate gap
-# correct at whatever height that turns
-# out to be.
+# Internal cavity height is set by the taller of the battery/MCU (both on
+# the tray floor now, see section 4) plus the display adhesive-stacked
+# above them, not by the switch's plate-mount geometry: that stack still
+# needs more height than the switches ever do, so the cavity height is
+# set by it, and the switch PCB's own shelf is derived (raised) to keep
+# its plate gap correct at whatever height that turns out to be.
 #
-# Stack order, bottom to top: MCU -> battery -> display. MCU rests on its
-# own floor-level shelf (build_tray()); the battery and display are
-# adhesive-stacked directly on top of the component below them, with NO
-# posts, shelves, or walls holding them up -- nothing printed registers
-# their position vertically beyond the adhesive itself.
+# Battery and MCU both sit on the tray floor side by side (section 4),
+# each at its own height: the MCU rests on its own floor-level shelf
+# (build_tray()) with under-board clearance; the battery sits directly on
+# the floor (a solid cell, nothing needs clearance beneath it) behind its
+# own retention wall. The display is adhesive-stacked above BOTH of them,
+# with NO post, shelf, or wall holding it up -- nothing printed registers
+# its position vertically beyond the adhesive itself.
 #
 #   0                                   tray floor top
 #   + MCU_SHELF_CLEARANCE               ordinary solder-joint clearance
 #   = MCU bottom
 #   + MCU_THICKNESS
-#   = MCU top = battery's resting height (BATTERY_REST_Z)
-#   + BATTERY_SHELF_CLEARANCE           assembly/adhesive-layer air gap
-#   + BATTERY_T
-#   = battery top = display's resting height (DISPLAY_REST_Z)
+#   = MCU top (MCU_TOP_Z); battery top (BATTERY_TOP_Z) sits at BATTERY_T,
+#     directly off the floor -- the display rests above whichever of the
+#     two is taller
 #   + DISPLAY_STANDOFF_H                assembly/adhesive-layer air gap
+#   = display's resting height (DISPLAY_REST_Z)
 #   + DISPLAY_THICKNESS
 #   = display top
 #   + STACK_TOP_MARGIN                  clearance to the plate
 #   = INTERNAL_CAVITY_H                 lid's inner (plate) face
 #
 MCU_TOP_Z = MCU_SHELF_CLEARANCE + MCU_THICKNESS       # = MCU's own physical top
+BATTERY_TOP_Z = BATTERY_T                             # = battery's own physical top (rests flat on the floor)
 
-# Standoff air gap reserved above each component's own top before the
-# next one starts -- headroom for the adhesive/foam-tape layer that holds
-# the battery and display in place, since neither has a post or shelf to
-# rest on.
-BATTERY_STANDOFF_H = 5.0
+# Standoff air gap reserved above the battery+MCU row's own top before
+# the display starts -- headroom for the adhesive/foam-tape layer that
+# holds the display in place, since it has no post or shelf to rest on.
 DISPLAY_STANDOFF_H = 5.0
 
-BATTERY_REST_Z = MCU_TOP_Z + BATTERY_STANDOFF_H       # = battery's resting height
-BATTERY_TOP_Z = BATTERY_REST_Z + BATTERY_SHELF_CLEARANCE + BATTERY_T  # = battery's own physical top
-DISPLAY_REST_Z = BATTERY_TOP_Z + DISPLAY_STANDOFF_H   # = display's resting height
+DISPLAY_REST_Z = max(MCU_TOP_Z, BATTERY_TOP_Z) + DISPLAY_STANDOFF_H   # = display's resting height
 DISPLAY_TOP_Z = DISPLAY_REST_Z + DISPLAY_THICKNESS
 STACK_TOP_MARGIN = 0.5  # deliberately tight -- see print_summary()'s strain-margin numbers
 INTERNAL_CAVITY_H = DISPLAY_TOP_Z + STACK_TOP_MARGIN
@@ -547,6 +575,19 @@ USB_C_NOTCH_Z0 = USB_C_CENTER_Z - USB_C_CUTOUT_H / 2.0 - 0.5
 USB_C_NOTCH_Z1 = USB_C_CENTER_Z + USB_C_CUTOUT_H / 2.0 + 0.5
 USB_C_NOTCH_HEIGHT = USB_C_NOTCH_Z1 - USB_C_NOTCH_Z0
 assert USB_C_NOTCH_Z0 > FLOOR_T, "USB-C notch would dip into the floor slab"
+
+# microSD slot Z-range (global), same -Y wall as the USB-C notch, same X
+# center (MICROSD_SLOT_X below) -- stacked directly above it per the
+# design brief, MICROSD_GAP_ABOVE_USBC clear of the notch's own top edge.
+# Shared by build_tray() and build_lid() the same way the USB-C notch is
+# (section 8): applied unconditionally in both, a no-op wherever there's
+# no material at that Z, so it stays correct regardless of which part it
+# actually falls in as the constants above change.
+MICROSD_SLOT_Z0 = USB_C_NOTCH_Z1 + MICROSD_GAP_ABOVE_USBC
+MICROSD_SLOT_Z1 = MICROSD_SLOT_Z0 + MICROSD_SLOT_H
+assert MICROSD_SLOT_Z1 < EXTERNAL_H - CEIL_T, (
+    "microSD slot (%.2f-%.2f) runs into the ceiling (%.2f) -- reduce "
+    "MICROSD_GAP_ABOVE_USBC or MICROSD_SLOT_H" % (MICROSD_SLOT_Z0, MICROSD_SLOT_Z1, EXTERNAL_H - CEIL_T))
 
 
 # ====================================================================
@@ -738,11 +779,10 @@ def build_tray():
               "relies on. Reduce BEAD_CHAMFER_SIZE and re-test.")
     tray = tray.fuse(bead_ring)
 
-    # Component shelves, all on the tray floor. Stack order is MCU
-    # (bottom) -> battery -> display (top). MCU gets a plain floor shelf;
-    # the battery and display get NO shelf, post, or wall in the tray at
-    # all -- see the module docstring's SUPPORT note. They are adhesive-
-    # stacked directly on top of the component below them.
+    # Component shelves, all on the tray floor. Battery and MCU sit side
+    # by side on the floor (section 4); the display has NO shelf, post,
+    # or wall in the tray at all -- see the module docstring's SUPPORT
+    # note. It's adhesive-stacked directly on top of the battery+MCU row.
     #
     # MCU: plain floor-level shelf, same pattern used everywhere a
     # component sits directly on the floor.
@@ -782,12 +822,41 @@ def build_tray():
     tray = tray.fuse(left_side_wall)
     tray = tray.fuse(right_side_wall)
 
-    # Battery and display: NOTHING is fused into the tray for them at all
-    # -- no posts, no shelf, no wall. Each rests adhesive-mounted directly
-    # on top of the component below it, at BATTERY_REST_Z / DISPLAY_REST_Z
-    # (section 5). The display's only retention comes from the LID side
-    # (screen_lip + screen_wall, build_lid()); the battery has no
-    # retention structure anywhere and relies entirely on the adhesive.
+    # Battery retention wall: stands on the floor between the battery and
+    # MCU zones, from the floor up to BATTERY_T (the battery's own
+    # height) -- keeps the battery from sliding toward the MCU (and vice
+    # versa), which is the only in-plane retention it has (nothing else
+    # touches it; the battery has no shelf, since it's a solid cell that
+    # needs no under-board clearance). Runs the battery's own Y span
+    # (BATTERY_D), sitting flush at BATTERY_X0 + BATTERY_W and reaching
+    # to MCU_X0 -- exactly BATTERY_WALL_T wide, so it also doubles as the
+    # MCU zone's own -X boundary: wherever the MCU's own left_side_wall
+    # (above) exists, this wall overlaps it (BATTERY_WALL_T (2.0mm) is
+    # thicker than the 1.35mm gap between MCU_X0 and that side wall's
+    # near face), a real volumetric overlap rather than a coincident
+    # face, so the two fuse into one shared wall exactly as intended.
+    battery_wall_x0 = WALL_T + BATTERY_X0 + BATTERY_W
+    battery_wall_y0 = WALL_T + BATTERY_Y0
+    battery_wall = Part.makeBox(
+        BATTERY_WALL_T, BATTERY_D, BATTERY_T,
+        Vector(battery_wall_x0, battery_wall_y0, FLOOR_T))
+    tray = tray.fuse(battery_wall)
+
+    # Cable pass-through for the battery's power leads, through the
+    # battery/MCU wall -- same size/style as the switch column's own
+    # wire_notch below, centered on the wall's length and mid-height.
+    BATTERY_WIRE_NOTCH_W, BATTERY_WIRE_NOTCH_H = 6.0, 4.0
+    battery_wire_y0 = battery_wall_y0 + BATTERY_D / 2.0 - BATTERY_WIRE_NOTCH_W / 2.0
+    battery_wire_z0 = FLOOR_T + BATTERY_T / 2.0 - BATTERY_WIRE_NOTCH_H / 2.0
+    battery_wire_cutter = Part.makeBox(
+        BATTERY_WALL_T + 2.0, BATTERY_WIRE_NOTCH_W, BATTERY_WIRE_NOTCH_H,
+        Vector(battery_wall_x0 - 1.0, battery_wire_y0, battery_wire_z0))
+    tray = tray.cut(battery_wire_cutter)
+
+    # Display: NOTHING is fused into the tray for it -- no posts, no
+    # shelf, no wall. It rests adhesive-mounted directly on top of the
+    # battery+MCU row, at DISPLAY_REST_Z (section 5). Its only retention
+    # comes from the LID side (screen_lip + screen_wall, build_lid()).
 
     # Switch column: shelf_frame on the SWITCH_COL_W x SWITCH_COL_L
     # footprint beside the stack. Its shelf height
@@ -802,7 +871,13 @@ def build_tray():
     # radius would leave room for. Sharp corners here would overlap the
     # skirt (confirmed: ~30mm^3 via tray.common(lid)) -- matching the
     # radii removes the conflict at its source.
-    SWITCH_SHELF_RIM_W = 2.0
+    # DERIVED (not a flat 2.0mm) so the shelf's inner pocket -- where the
+    # switch PCB actually rests -- lands exactly on SWITCH_HOLE (14mm),
+    # not 14.6mm: a flat 2.0mm rim only cancels SWITCH_PCB_MARGIN_Y, and
+    # leaves the 2*FIT_CLEARANCE_XY added to the shelf's outer footprint
+    # (line below) leaking straight into the inner opening instead of
+    # being absorbed by the rim.
+    SWITCH_SHELF_RIM_W = ((SWITCH_COL_W + 2 * FIT_CLEARANCE_XY) - SWITCH_HOLE) / 2.0
     switch_shelf_floor_r = max(CORNER_FILLET_OUTER - WALL_T - SKIRT_CLEARANCE, 0.1)
     tray = tray.fuse(shelf_frame(
         SWITCH_COL_W + 2 * FIT_CLEARANCE_XY, SWITCH_COL_L + 2 * FIT_CLEARANCE_XY,
@@ -811,16 +886,16 @@ def build_tray():
         floor_r=switch_shelf_floor_r))
 
     # Wire pass-through: the switch column's shelf_frame is a continuous
-    # ring (unlike the stack's posts/brackets), so its wall facing the
-    # stack would otherwise block routing the switch wires to the MCU.
-    # Cut a small notch through JUST that wall (the one facing the stack,
-    # -X side) so wires have a clear, deliberate path from the switch PCB
-    # over to the MCU (which sits mid-stack, reachable through the same
-    # open gap the wires cross). Centered along the switch column's
-    # length, mid-height in its shelf.
+    # ring (unlike the MCU's own open-front U-wall), so its wall facing
+    # the battery+MCU row would otherwise block routing the switch wires
+    # to the MCU. Cut a small notch through JUST that wall (the one
+    # facing the row, -X side) so wires have a clear, deliberate path
+    # from the switch PCB across ROW_GAP to the MCU, which now sits
+    # immediately next door. Centered along the switch column's length,
+    # mid-height in its shelf.
     wire_notch_w, wire_notch_h = 6.0, 4.0
     wire_notch_x0 = WALL_T + SWITCH_COL_X0 - FIT_CLEARANCE_XY - 1.0  # 1mm overshoot into the open gap
-    wire_notch_depth = SWITCH_SHELF_RIM_W + 2.0  # punches cleanly through the 2mm rim wall
+    wire_notch_depth = SWITCH_SHELF_RIM_W + 2.0  # punches cleanly through the rim wall
     wire_notch_y0 = WALL_T + SWITCH_COL_Y0 + SWITCH_COL_L / 2.0 - wire_notch_w / 2.0
     wire_notch_z0 = SWITCH_PCB_BELOW_CLEARANCE / 2.0 - wire_notch_h / 2.0
     wire_cutter = Part.makeBox(
@@ -876,6 +951,12 @@ def build_tray():
     notch_w = USB_C_CUTOUT_W + 0.5  # +1mm clearance per side for the plug/cable
     cutter = stadium_slot_y(usbc_cx, USB_C_NOTCH_Z0, notch_w, USB_C_NOTCH_HEIGHT, -2.0, 12.0)
     tray = tray.cut(cutter)
+
+    # microSD slot, same -Y wall, same X center as the USB-C notch,
+    # MICROSD_GAP_ABOVE_USBC above it (section 5/2) -- same STADIUM shape
+    # as the USB-C cutter for a clean, print-friendly rounded-end opening.
+    sd_cutter = stadium_slot_y(usbc_cx, MICROSD_SLOT_Z0, MICROSD_SLOT_W, MICROSD_SLOT_H, -2.0, 12.0)
+    tray = tray.cut(sd_cutter)
 
     return tray
 
@@ -1156,6 +1237,12 @@ def build_lid():
     cutter = stadium_slot_y(usbc_cx, notch_z0_local, notch_w, USB_C_NOTCH_HEIGHT, -2.0, 12.0)
     lid = lid.cut(cutter)
 
+    # microSD slot (see build_tray()): same X center and shape as the
+    # USB-C notch, converted to the lid's own local Z frame the same way.
+    sd_z0_local = MICROSD_SLOT_Z0 - LID_PLACEMENT_Z
+    sd_cutter = stadium_slot_y(usbc_cx, sd_z0_local, MICROSD_SLOT_W, MICROSD_SLOT_H, -2.0, 12.0)
+    lid = lid.cut(sd_cutter)
+
     return lid
 
 
@@ -1219,21 +1306,19 @@ def print_summary():
     print("-- Footprint / layout --")
     print("External footprint : %.2f x %.2f mm" % (EXTERNAL_W, EXTERNAL_D))
     print("Internal cavity     : %.2f x %.2f mm" % (INTERNAL_W, INTERNAL_D))
-    print("Stack footprint (MCU+battery+screen): %.2f x %.2f mm at (%.2f, %.2f)" % (STACK_W, STACK_D, STACK_X0, STACK_Y0))
-    print("  MCU (bottom, floor shelf): %.2f x %.2f mm at (%.2f, %.2f)" % (
+    print("Battery+MCU row footprint: %.2f x %.2f mm at (%.2f, %.2f)" % (STACK_ROW_W, STACK_D, STACK_X0, STACK_Y0))
+    print("  Battery (floor, retention wall): %.2f x %.2f mm at (%.2f, %.2f)" % (BATTERY_W, BATTERY_D, BATTERY_X0, BATTERY_Y0))
+    print("  MCU (floor, shelf + U-wall): %.2f x %.2f mm at (%.2f, %.2f)" % (
         MCU_D, MCU_W, MCU_X0, MCU_Y0))
-    print("  Battery (middle, adhesive-stacked, no posts): %.2f x %.2f mm at (%.2f, %.2f)" % (BATTERY_W, BATTERY_D, BATTERY_X0, BATTERY_Y0))
-    print("  Screen (top, adhesive-stacked, no posts) : %.2f x %.2f mm at (%.2f, %.2f)" % (SCREEN_W, SCREEN_L, SCREEN_X0, SCREEN_Y0))
-    print("Switch column (beside the stack): %.2f x %.2f mm at (%.2f, %.2f)" % (
+    print("  Screen (adhesive-stacked above the row, no posts) : %.2f x %.2f mm at (%.2f, %.2f)" % (SCREEN_W, SCREEN_L, SCREEN_X0, SCREEN_Y0))
+    print("Switch column (beside the row): %.2f x %.2f mm at (%.2f, %.2f)" % (
         SWITCH_COL_W, SWITCH_COL_L, SWITCH_COL_X0, SWITCH_COL_Y0))
     print()
-    print("-- Height (Z) budget, from tray floor top -- set by the stack, not the switches --")
+    print("-- Height (Z) budget, from tray floor top -- set by the battery+MCU+screen stack, not the switches --")
     print("Internal cavity height (= PCB-to-plate stack): %.2f mm" % INTERNAL_CAVITY_H)
     print("  MCU shelf clearance     : %.2f mm" % MCU_SHELF_CLEARANCE)
     print("  MCU thickness           : %.2f mm  -> MCU top at Z=%.2f" % (MCU_THICKNESS, MCU_TOP_Z))
-    print("  battery standoff        : %.2f mm  -> battery resting height at Z=%.2f" % (BATTERY_STANDOFF_H, BATTERY_REST_Z))
-    print("  battery adhesive gap    : %.2f mm" % BATTERY_SHELF_CLEARANCE)
-    print("  battery thickness       : %.2f mm  -> battery top at Z=%.2f" % (BATTERY_T, BATTERY_TOP_Z))
+    print("  battery thickness       : %.2f mm  -> battery top at Z=%.2f (rests flat on the floor)" % (BATTERY_T, BATTERY_TOP_Z))
     print("  display standoff        : %.2f mm  -> display resting height at Z=%.2f" % (DISPLAY_STANDOFF_H, DISPLAY_REST_Z))
     print("  display thickness       : %.2f mm  -> display top at Z=%.2f" % (DISPLAY_THICKNESS, DISPLAY_TOP_Z))
     print("  -> margin below plate: %.2f mm (deliberately tight)" % STACK_TOP_MARGIN)
@@ -1265,6 +1350,8 @@ def print_summary():
         ("Display module thickness", DISPLAY_THICKNESS, "e-paper HAT glass+PCB, no pin header assumed"),
         ("MCU assembled thickness", MCU_THICKNESS, "XIAO board + antenna/shield + solder"),
         ("MCU USB-C connector center height", USB_C_CENTER_Z_ABOVE_SHELF, "above MCU shelf -- verify against real board"),
+        ("microSD slot width", MICROSD_SLOT_W, "11mm card + slide clearance -- verify against real board"),
+        ("microSD slot height", MICROSD_SLOT_H, "card thickness + holder margin -- verify against real board"),
         ("Switch PCB thickness", SWITCH_PCB_THICKNESS, "standard FR4"),
         ("PCB-to-plate gap", PCB_TO_PLATE, "universal keyboard-plate convention"),
         ("Switch key pitch", SWITCH_PITCH, "standard 0.75in / 19.05mm keyboard pitch"),
@@ -1281,15 +1368,19 @@ def print_summary():
     print("      the physical parts -- both are ASSUMPTIONS above, not datasheet values.")
     print("  [ ] Confirm the XIAO's USB-C connector Z-position against the real board;")
     print("      the cutout has %.1fmm of height to absorb a modest placement error." % USB_C_CUTOUT_H)
+    print("  [ ] Confirm the microSD slot's actual position on the Sense board -- its")
+    print("      opening is placed %.1fmm above the USB-C notch by assumption, not a" % MICROSD_GAP_ABOVE_USBC)
+    print("      measured board position; re-check card insertion/removal clears the case.")
     print("  [ ] If this case will be opened/closed often, consider printing the LID")
     print("      in PETG (elongation-at-break ~20-30%%) instead of PLA (%.1f%%) for a" % (ELONGATION_AT_BREAK * 100))
     print("      more durable snap; re-run with ELONGATION_AT_BREAK adjusted to check margin.")
     print("  [ ] Slice with >=3 perimeters on the lid skirt / tray bead region so the")
     print("      %.1fmm flex wall is solid, not sparse-infill." % SNAP_SKIRT_T)
-    print("  [ ] The battery and display are adhesive/foam-tape mounted with no posts,")
-    print("      shelves, or walls holding them up in the tray -- make sure the adhesive")
-    print("      bond is solid before closing the case; nothing else registers their")
-    print("      position or keeps them from shifting.")
+    print("  [ ] The display is adhesive/foam-tape mounted with no posts, shelves, or")
+    print("      walls holding it up in the tray -- make sure the adhesive bond is solid")
+    print("      before closing the case; nothing else registers its vertical position.")
+    print("      The battery rests against its retention wall in-plane but is still")
+    print("      loose in Z -- tape it down too.")
     print("=" * 72)
 
 
