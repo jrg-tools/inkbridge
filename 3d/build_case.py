@@ -463,12 +463,19 @@ SWITCH_COL_X0 = STACK_X0 + STACK_ROW_W + ROW_GAP
 SWITCH_COL_Y0 = BORDER + (CONTENT_D - SWITCH_COL_L) / 2.0
 
 # MCU: beside the battery, across the open BATTERY_MCU_GAP (X extent
-# is MCU's short/USB-C edge, MCU_D; long axis MCU_W runs along Y). Flush
-# with the row's own -Y edge so the MCU's USB-C short edge sits close to
-# the case's -Y (top) wall -- same reasoning as the old Z-stacked layout,
-# just applied in-plane now instead of offset in Y from the battery.
+# is MCU's short/USB-C edge, MCU_D; long axis MCU_W runs along Y).
+# MCU_WALL_GAP_REDUCTION (3.0mm, requested) pulls the MCU's own -Y edge
+# 3mm closer to the case's -Y (top) wall than the row's shared STACK_Y0 --
+# the battery is NOT affected, it stays at STACK_Y0 (BATTERY_Y0 below is
+# still defined off STACK_Y0, not MCU_Y0), since the two no longer share
+# a Y origin the way they do an X-adjacency. Only reduces the FRONT gap;
+# doesn't change MCU_W/MCU_D or anything about the shelf/backstop sizes.
+MCU_WALL_GAP_REDUCTION = 3.0
 MCU_X0 = BATTERY_X0 + BATTERY_W + BATTERY_MCU_GAP
-MCU_Y0 = STACK_Y0
+MCU_Y0 = STACK_Y0 - MCU_WALL_GAP_REDUCTION
+assert MCU_Y0 - FIT_CLEARANCE_XY >= 0, (
+    "MCU_WALL_GAP_REDUCTION pulls the MCU shelf's own clearance margin "
+    "past the case's -Y interior wall face -- reduce MCU_WALL_GAP_REDUCTION")
 
 # ====================================================================
 # 5. DERIVED Z STACK
@@ -523,7 +530,15 @@ INTERNAL_CAVITY_H = DISPLAY_TOP_Z + STACK_TOP_MARGIN
 SWITCH_PCB_BELOW_CLEARANCE = INTERNAL_CAVITY_H - PCB_TO_PLATE - SWITCH_PCB_THICKNESS
 assert SWITCH_PCB_BELOW_CLEARANCE > 0, (
     "stack (%.2f) leaves no room for the switch PCB's own plate gap" % INTERNAL_CAVITY_H)
-SWITCH_PCB_TOP_Z = SWITCH_PCB_BELOW_CLEARANCE + SWITCH_PCB_THICKNESS
+
+# Physical shelf ("buttons box") height actually built in build_tray():
+# +1mm over the derived clearance above, per request. Applied ONLY to
+# the switch column, not the rest of the stack, so it eats directly into
+# the switches' own PCB_TO_PLATE gap (5mm -> 4mm) rather than growing
+# the whole case/cavity.
+SWITCH_SHELF_HEIGHT_BOOST = 1.0
+SWITCH_SHELF_H = SWITCH_PCB_BELOW_CLEARANCE + SWITCH_SHELF_HEIGHT_BOOST
+SWITCH_PCB_TOP_Z = SWITCH_SHELF_H + SWITCH_PCB_THICKNESS
 
 FLOOR_T = WALL_T
 CEIL_T = WALL_T
@@ -930,23 +945,27 @@ def build_tray():
     switch_shelf_floor_r = max(CORNER_FILLET_OUTER - WALL_T - SKIRT_CLEARANCE, 0.1)
     tray = tray.fuse(shelf_frame(
         SWITCH_COL_W + 2 * FIT_CLEARANCE_XY, SWITCH_COL_L + 2 * FIT_CLEARANCE_XY,
-        SWITCH_SHELF_RIM_W, SWITCH_PCB_BELOW_CLEARANCE, FLOOR_T,
+        SWITCH_SHELF_RIM_W, SWITCH_SHELF_H, FLOOR_T,
         (WALL_T + SWITCH_COL_X0 - FIT_CLEARANCE_XY, WALL_T + SWITCH_COL_Y0 - FIT_CLEARANCE_XY),
         floor_r=switch_shelf_floor_r))
 
     # Wire pass-through: the switch column's shelf_frame is a continuous
     # ring (unlike the MCU's own open-front U-wall), so its wall facing
     # the battery+MCU row would otherwise block routing the switch wires
-    # to the MCU. Cut a small notch through JUST that wall (the one
-    # facing the row, -X side) so wires have a clear, deliberate path
-    # from the switch PCB across ROW_GAP to the MCU, which now sits
-    # immediately next door. Centered along the switch column's length,
-    # mid-height in its shelf.
-    wire_notch_w, wire_notch_h = 6.0, 4.0
+    # to the MCU. Cut a notch through JUST that wall (the one facing the
+    # row, -X side) so wires have a clear, deliberate path from the
+    # switch PCB across ROW_GAP to the MCU, which now sits immediately
+    # next door. Centered along the switch column's length. Open-topped
+    # (cut all the way through the shelf wall's own top) rather than an
+    # enclosed hole, per request -- a cable presses straight down into an
+    # open gap; threading it through a fully enclosed hole is fiddly.
+    wire_notch_w = 6.0
     wire_notch_x0 = WALL_T + SWITCH_COL_X0 - FIT_CLEARANCE_XY - 1.0  # 1mm overshoot into the open gap
     wire_notch_depth = SWITCH_SHELF_RIM_W + 2.0  # punches cleanly through the rim wall
     wire_notch_y0 = WALL_T + SWITCH_COL_Y0 + SWITCH_COL_L / 2.0 - wire_notch_w / 2.0
-    wire_notch_z0 = SWITCH_PCB_BELOW_CLEARANCE / 2.0 - wire_notch_h / 2.0
+    wire_notch_z0 = SWITCH_PCB_BELOW_CLEARANCE / 2.0 - 2.0  # same floor as the old enclosed hole
+    wire_notch_top = FLOOR_T + SWITCH_SHELF_H + 2.0  # through the shelf top, +2mm overshoot for a clean cut
+    wire_notch_h = wire_notch_top - wire_notch_z0
     wire_cutter = Part.makeBox(
         wire_notch_depth, wire_notch_w, wire_notch_h,
         Vector(wire_notch_x0, wire_notch_y0, wire_notch_z0))
@@ -969,7 +988,7 @@ def build_tray():
     #     wire_cutter (just above) punches through, so this wall can't
     #     block that cable path.
     #   - Sharp corners, matching the shelf's own corners just above.
-    # Z-range: floor to SWITCH_PCB_BELOW_CLEARANCE -- flush with the
+    # Z-range: floor to SWITCH_SHELF_H -- flush with the
     # shelf/button-box top (not up to the plate plane), so it separates
     # the two switches through their below-PCB/hot-swap-socket zone
     # without poking up into the open finger/keycap space above the PCB.
@@ -984,7 +1003,7 @@ def build_tray():
     divider_x0 = switch_inner_x0 + switch_inner_w - divider_len
     divider_y_mid = WALL_T + SWITCH_COL_Y0 + SWITCH_COL_L / 2.0
     divider_y0 = divider_y_mid - BUTTON_DIVIDER_T / 2.0
-    divider_h = SWITCH_PCB_BELOW_CLEARANCE
+    divider_h = SWITCH_SHELF_H
     divider = Part.makeBox(divider_len, BUTTON_DIVIDER_T, divider_h,
                             Vector(divider_x0, divider_y0, FLOOR_T))
     tray = tray.fuse(divider)
@@ -1402,6 +1421,8 @@ def print_summary():
     print("  -> margin below plate: %.2f mm (deliberately tight)" % STACK_TOP_MARGIN)
     print("Switch PCB shelf (derived to keep the %.1fmm plate gap correct at this height): %.2f mm" % (
         PCB_TO_PLATE, SWITCH_PCB_BELOW_CLEARANCE))
+    print("  + %.1fmm button-box height boost -> built shelf height: %.2f mm (plate gap shrinks to %.2f mm)" % (
+        SWITCH_SHELF_HEIGHT_BOOST, SWITCH_SHELF_H, PCB_TO_PLATE - SWITCH_SHELF_HEIGHT_BOOST))
     print("External case height (tray+lid, assembled)  : %.2f mm" % EXTERNAL_H)
     print("  VISIBLE SEAM at Z=%.2f mm (%.0f%% up the case)" % (
         TRAY_EXTERNAL_H, 100.0 * SEAM_FRACTION))
@@ -1445,7 +1466,8 @@ def print_summary():
         ("PCB-to-plate gap", PCB_TO_PLATE, "universal keyboard-plate convention"),
         ("Switch key pitch", SWITCH_PITCH, "standard 0.75in / 19.05mm keyboard pitch"),
         ("Switch housing height above PCB", SWITCH_HOUSING_ABOVE_PCB, "informational, Cherry MX typical"),
-        ("Below-switch-PCB clearance", SWITCH_PCB_BELOW_CLEARANCE, "hot-swap socket + plunger pin protrusion"),
+        ("Below-switch-PCB clearance (built, incl. +%.1fmm box boost)" % SWITCH_SHELF_HEIGHT_BOOST,
+         SWITCH_SHELF_H, "hot-swap socket + plunger pin protrusion"),
     ]:
         print("  %-38s %6.2f mm  (%s)" % (name, val, note))
     print()
