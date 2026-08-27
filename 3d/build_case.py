@@ -53,13 +53,16 @@ trades case height for a smaller footprint now; the battery and MCU no
 longer do.
 
 SUPPORT: the MCU rests on a floor-level shelf pocket (shelf_frame()) with
-open air below it for solder joints, plus a U-shaped retention wall on 3
-sides (open at the USB-C edge) so a charging plug pushes against a
-floor-anchored wall instead of relying on friction alone. The battery
-sits directly on the tray floor (no shelf -- it's a solid cell, nothing
-needs clearance beneath it) with a single retention wall between it and
-the MCU (the wall the two zones share) so it can't slide sideways. The
-display has NO posts, shelves, or walls holding it up in the tray at all
+open air below it for solder joints, plus a single BACKSTOP wall (open
+on the other 3 sides -- see MCU_BACKSTOP_T's comment for why both side
+walls that used to exist here were removed, to leave the button and
+battery cables' own routing paths clear) so a charging plug pushes
+against a floor-anchored wall instead of relying on friction alone. The
+battery sits directly on the tray floor (no shelf -- it's a solid cell,
+nothing needs clearance beneath it), separated from the MCU only by the
+open BATTERY_MCU_GAP air gap (no dividing wall, and so no dedicated
+in-plane retention of its own either -- see that constant's comment).
+The display has NO posts, shelves, or walls holding it up in the tray at all
 -- it's adhesive/tape-mounted directly on top of the battery+MCU row, at
 DISPLAY_REST_Z (section 5); nothing in the printed tray registers the
 display's position. It additionally gets a full lateral-confinement ring
@@ -293,34 +296,42 @@ BORDER = 2.0             # gap between innermost wall face and component zones
 # retention at all -- friction only. That's a real problem specifically
 # for this board: charging means repeatedly pushing a USB-C plug in
 # through the case wall, a genuine horizontal shove aimed straight at
-# the board. A U-shaped wall (back + 2 sides, open at the USB-C front
-# for cable access) turns that push into compression against a wall
-# anchored in the floor, instead of relying on friction to hold the
-# board still. Uses a TIGHTER clearance than the general
-# FIT_CLEARANCE_XY (0.30mm) specifically here -- the board still needs
-# to drop in from above without binding, but the whole point is
-# minimizing the slop it can shift through before the push force is
-# actually caught.
+# the board. A single BACKSTOP wall (open on all 3 other sides) turns
+# that push into compression against a wall anchored in the floor,
+# instead of relying on friction to hold the board still. Uses a TIGHTER
+# clearance than the general FIT_CLEARANCE_XY (0.30mm) specifically here
+# -- the board still needs to drop in from above without binding, but the
+# whole point is minimizing the slop it can shift through before the
+# push force is actually caught.
+#
+# NO SIDE WALLS at all (both used to exist, both removed by request): the
+# switch-column side blocked the button cables' own routing path through
+# ROW_GAP, and the battery side blocked routing/assembly across
+# BATTERY_MCU_GAP once that dividing wall came out too -- see
+# BATTERY_MCU_GAP's own comment. The backstop alone is still enough to
+# catch a USB-C push (the push is front-to-back, along Y); the side
+# walls only ever stopped off-axis rocking, not the main insertion force.
 MCU_RETENTION_CLEARANCE = 0.15
 MCU_BACKSTOP_T = 2.0        # back wall thickness -- takes the insertion push
-MCU_SIDE_WALL_T = 1.2       # side guide wall thickness -- stops off-axis rocking
-MCU_SIDE_WALL_FRACTION = 0.6  # side walls cover only the back 60% of MCU's
-                               # length, left loose (normal clearance) near the
-                               # USB-C edge so the connector itself is never
-                               # pinched and the board still drops in easily
 
-# ---- Battery retention --------------------------------------------------
-# The battery sits directly on the tray floor next to the MCU (not
-# adhesive-stacked on top of it anymore, see section 4's layout), so it
-# needs its own in-plane retention the same way the MCU does. A single
-# wall between the battery and MCU zones does the job -- the two zones
-# sit flush against each other, so this one wall is both the battery's
-# retention and the MCU zone's own boundary on that side, rather than
-# each getting a separate wall (they "share the same wall" per the
-# layout brief). A cable notch through it lets the battery's power leads
-# reach the MCU, same idea as the switch column's wire_notch
-# (build_tray()).
-BATTERY_WALL_T = 2.0
+# ---- Battery / MCU gap (no dividing wall) -------------------------------
+# The battery and MCU used to share a single dividing wall here (both the
+# battery's own in-plane retention AND the MCU zone's -X boundary), with a
+# cable notch cut through it for the battery's power leads. Removed
+# entirely per request -- it was blocking easy cable routing between the
+# two zones, the same complaint that got the MCU's switch-side wall
+# removed above. BATTERY_MCU_GAP is now just open floor, no printed
+# material: enough of an air gap for the battery's leads to cross to the
+# MCU without any notch, and to keep the two components from touching
+# directly at nominal size.
+#
+# TRADE-OFF: the battery now has NO dedicated in-plane retention at all
+# (previously this wall was its only one -- see the removed comment's own
+# reasoning). Nothing stops it sliding toward the MCU besides friction
+# and the tape called out in print_summary()'s checklist; if that's not
+# enough in practice, the fix is a small standalone retention nub/rail
+# added back on the battery's own side only (not spanning to the MCU).
+BATTERY_MCU_GAP = 1.0
 
 # ---- Screen retention -------------------------------------------------
 # No lid-side snap TAB hanging from the ceiling: the only Z room
@@ -414,11 +425,11 @@ SCREEN_W, SCREEN_L = DISPLAY_MODULE_W, DISPLAY_MODULE_D  # 65 x 30, landscape
 # little width as possible next to the row.
 SWITCH_COL_W, SWITCH_COL_L = SWITCH_PCB_D, SWITCH_PCB_W
 
-# Battery + MCU row: battery, the shared retention wall, then the MCU --
-# all side by side along X. Row depth is the bounding box of whichever
-# member is deepest (screen sits above the whole row, so it's included
-# too even though it isn't part of the row itself).
-STACK_ROW_W = BATTERY_W + BATTERY_WALL_T + MCU_D
+# Battery + MCU row: battery, an open gap (no wall, see BATTERY_MCU_GAP),
+# then the MCU -- all side by side along X. Row depth is the bounding box
+# of whichever member is deepest (screen sits above the whole row, so
+# it's included too even though it isn't part of the row itself).
+STACK_ROW_W = BATTERY_W + BATTERY_MCU_GAP + MCU_D
 STACK_D = max(SCREEN_L, BATTERY_D, MCU_W)
 
 CONTENT_W = STACK_ROW_W + ROW_GAP + SWITCH_COL_W
@@ -451,12 +462,12 @@ BATTERY_Y0 = STACK_Y0 + (STACK_D - BATTERY_D) / 2.0
 SWITCH_COL_X0 = STACK_X0 + STACK_ROW_W + ROW_GAP
 SWITCH_COL_Y0 = BORDER + (CONTENT_D - SWITCH_COL_L) / 2.0
 
-# MCU: beside the battery, across their shared retention wall (X extent
+# MCU: beside the battery, across the open BATTERY_MCU_GAP (X extent
 # is MCU's short/USB-C edge, MCU_D; long axis MCU_W runs along Y). Flush
 # with the row's own -Y edge so the MCU's USB-C short edge sits close to
 # the case's -Y (top) wall -- same reasoning as the old Z-stacked layout,
 # just applied in-plane now instead of offset in Y from the battery.
-MCU_X0 = BATTERY_X0 + BATTERY_W + BATTERY_WALL_T
+MCU_X0 = BATTERY_X0 + BATTERY_W + BATTERY_MCU_GAP
 MCU_Y0 = STACK_Y0
 
 # ====================================================================
@@ -868,10 +879,12 @@ def build_tray():
         1.5, MCU_SHELF_CLEARANCE, FLOOR_T,
         (WALL_T + MCU_X0 - FIT_CLEARANCE_XY, WALL_T + MCU_Y0 - FIT_CLEARANCE_XY)))
 
-    # MCU retention: a U-shaped wall (back + 2 sides, open at the USB-C
-    # front) so charging -- pushing a USB-C plug straight at the board --
-    # is resisted by a floor-anchored wall, not just friction on the
-    # shelf's flat ledge above. Uses MCU_RETENTION_CLEARANCE (0.15mm),
+    # MCU retention: a single BACKSTOP wall (open on all 3 other sides) so
+    # charging -- pushing a USB-C plug straight at the board -- is
+    # resisted by a floor-anchored wall, not just friction on the shelf's
+    # flat ledge above. No side walls at all anymore (both the
+    # switch-column-side and battery-side ones were removed by request --
+    # see section 3's comment). Uses MCU_RETENTION_CLEARANCE (0.15mm),
     # tighter than the general FIT_CLEARANCE_XY (0.30mm) used everywhere
     # else, and rises to MCU_TOP_Z (5.0mm here).
     mcu_x0 = WALL_T + MCU_X0 - MCU_RETENTION_CLEARANCE
@@ -882,53 +895,12 @@ def build_tray():
         Vector(mcu_x0, mcu_back_y, FLOOR_T))
     tray = tray.fuse(backstop)
 
-    # Side guide walls: only the back MCU_SIDE_WALL_FRACTION of MCU's
-    # length, overlapping OVERLAP_EPS_MCU into the backstop's own
-    # footprint for a guaranteed fuse (same coincident-face pattern
-    # documented at the snap bead, below) -- left open near the USB-C
-    # edge so the connector and its cable clearance are never pinched.
-    OVERLAP_EPS_MCU = 0.1
-    side_wall_y0 = WALL_T + MCU_Y0 + MCU_W * (1.0 - MCU_SIDE_WALL_FRACTION)
-    side_wall_y1 = mcu_back_y + OVERLAP_EPS_MCU
-    left_side_wall = Part.makeBox(
-        MCU_SIDE_WALL_T, side_wall_y1 - side_wall_y0, MCU_TOP_Z,
-        Vector(mcu_x0 - MCU_SIDE_WALL_T, side_wall_y0, FLOOR_T))
-    right_side_wall = Part.makeBox(
-        MCU_SIDE_WALL_T, side_wall_y1 - side_wall_y0, MCU_TOP_Z,
-        Vector(mcu_x1, side_wall_y0, FLOOR_T))
-    tray = tray.fuse(left_side_wall)
-    tray = tray.fuse(right_side_wall)
-
-    # Battery retention wall: stands on the floor between the battery and
-    # MCU zones, from the floor up to BATTERY_T (the battery's own
-    # height) -- keeps the battery from sliding toward the MCU (and vice
-    # versa), which is the only in-plane retention it has (nothing else
-    # touches it; the battery has no shelf, since it's a solid cell that
-    # needs no under-board clearance). Runs the battery's own Y span
-    # (BATTERY_D), sitting flush at BATTERY_X0 + BATTERY_W and reaching
-    # to MCU_X0 -- exactly BATTERY_WALL_T wide, so it also doubles as the
-    # MCU zone's own -X boundary: wherever the MCU's own left_side_wall
-    # (above) exists, this wall overlaps it (BATTERY_WALL_T (2.0mm) is
-    # thicker than the 1.35mm gap between MCU_X0 and that side wall's
-    # near face), a real volumetric overlap rather than a coincident
-    # face, so the two fuse into one shared wall exactly as intended.
-    battery_wall_x0 = WALL_T + BATTERY_X0 + BATTERY_W
-    battery_wall_y0 = WALL_T + BATTERY_Y0
-    battery_wall = Part.makeBox(
-        BATTERY_WALL_T, BATTERY_D, BATTERY_T,
-        Vector(battery_wall_x0, battery_wall_y0, FLOOR_T))
-    tray = tray.fuse(battery_wall)
-
-    # Cable pass-through for the battery's power leads, through the
-    # battery/MCU wall -- same size/style as the switch column's own
-    # wire_notch below, centered on the wall's length and mid-height.
-    BATTERY_WIRE_NOTCH_W, BATTERY_WIRE_NOTCH_H = 6.0, 4.0
-    battery_wire_y0 = battery_wall_y0 + BATTERY_D / 2.0 - BATTERY_WIRE_NOTCH_W / 2.0
-    battery_wire_z0 = FLOOR_T + BATTERY_T / 2.0 - BATTERY_WIRE_NOTCH_H / 2.0
-    battery_wire_cutter = Part.makeBox(
-        BATTERY_WALL_T + 2.0, BATTERY_WIRE_NOTCH_W, BATTERY_WIRE_NOTCH_H,
-        Vector(battery_wall_x0 - 1.0, battery_wire_y0, battery_wire_z0))
-    tray = tray.cut(battery_wire_cutter)
+    # No battery/MCU dividing wall anymore -- see BATTERY_MCU_GAP's own
+    # comment (section 3). The battery sits on the bare floor with
+    # BATTERY_MCU_GAP of open air between it and the MCU, nothing printed
+    # in between; the battery's power leads cross that same open gap
+    # freely, no cable notch needed since there's no wall to cut one
+    # through.
 
     # Display: NOTHING is fused into the tray for it -- no posts, no
     # shelf, no wall. It rests adhesive-mounted directly on top of the
@@ -1413,8 +1385,8 @@ def print_summary():
     print("External footprint : %.2f x %.2f mm" % (EXTERNAL_W, EXTERNAL_D))
     print("Internal cavity     : %.2f x %.2f mm" % (INTERNAL_W, INTERNAL_D))
     print("Battery+MCU row footprint: %.2f x %.2f mm at (%.2f, %.2f)" % (STACK_ROW_W, STACK_D, STACK_X0, STACK_Y0))
-    print("  Battery (floor, retention wall): %.2f x %.2f mm at (%.2f, %.2f)" % (BATTERY_W, BATTERY_D, BATTERY_X0, BATTERY_Y0))
-    print("  MCU (floor, shelf + U-wall): %.2f x %.2f mm at (%.2f, %.2f)" % (
+    print("  Battery (floor, no dedicated retention): %.2f x %.2f mm at (%.2f, %.2f)" % (BATTERY_W, BATTERY_D, BATTERY_X0, BATTERY_Y0))
+    print("  MCU (floor, shelf + backstop only): %.2f x %.2f mm at (%.2f, %.2f)" % (
         MCU_D, MCU_W, MCU_X0, MCU_Y0))
     print("  Screen (adhesive-stacked above the row, no posts) : %.2f x %.2f mm at (%.2f, %.2f)" % (SCREEN_W, SCREEN_L, SCREEN_X0, SCREEN_Y0))
     print("Switch column (beside the row): %.2f x %.2f mm at (%.2f, %.2f)" % (
@@ -1499,8 +1471,9 @@ def print_summary():
     print("  [ ] The display is adhesive/foam-tape mounted with no posts, shelves, or")
     print("      walls holding it up in the tray -- make sure the adhesive bond is solid")
     print("      before closing the case; nothing else registers its vertical position.")
-    print("      The battery rests against its retention wall in-plane but is still")
-    print("      loose in Z -- tape it down too.")
+    print("      The battery now has NO printed in-plane retention at all (the")
+    print("      battery/MCU dividing wall was removed by request) -- it's loose in")
+    print("      X/Y as well as Z, so tape/foam-pad it down on all axes before closing.")
     print("=" * 72)
 
 
