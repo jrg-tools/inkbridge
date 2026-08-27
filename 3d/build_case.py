@@ -79,6 +79,15 @@ snap_fit_strain() (section 6). No separate alignment pins -- the
 bead/groove engagement plus the switch plate-hole engagement register the
 lid in X/Y between them.
 
+A second, smaller detent grips the display module itself against the
+lid's screen retention wall (screen_snap_strain(), section 6) -- the
+rigid module plays the "bead" half, the thin cantilevered screen_wall
+plays the "groove" half, same physics as the main snap above just
+checked separately since its thickness/flex-length differ. It's an
+XY-plane (sideways) squeeze, not a Z-axis hook, because the Z room above
+the display (STACK_TOP_MARGIN, 0.5mm) is too tight for a cantilever to
+ever spring rather than jam -- see "Screen retention" in section 3.
+
 VISIBLE SEAM: sits at the middle of the case height (SEAM_FRACTION=0.5).
 The lid has its own full-height "cap wall" above the seam, flush with the
 tray's own wall, and a thinner skirt hidden inside the tray's cavity below
@@ -314,16 +323,50 @@ MCU_SIDE_WALL_FRACTION = 0.6  # side walls cover only the back 60% of MCU's
 BATTERY_WALL_T = 2.0
 
 # ---- Screen retention -------------------------------------------------
-# No lid-side snap tab: the only Z room available for a tab to hang from
-# the ceiling and flex is STACK_TOP_MARGIN (0.5mm), and a beam that short
-# is thousands of times stiffer than the case's own 5.5mm snap skirt
-# (deflection ~ 1/L^3) -- it would jam or not touch, never spring.
+# No lid-side snap TAB hanging from the ceiling: the only Z room
+# available for a tab to hang from the ceiling and flex is
+# STACK_TOP_MARGIN (0.5mm), and a beam that short is thousands of times
+# stiffer than the case's own 5.5mm snap skirt (deflection ~ 1/L^3) --
+# it would jam or not touch, never spring.
 #
 # The display has no posts, shelves, or walls in the TRAY at all (see the
 # module docstring's SUPPORT note) -- it's adhesive/tape-mounted directly
 # on top of the battery+MCU row. Its only retention is on the LID side:
 # screen_lip and screen_wall (build_lid()) form a ring around its
 # perimeter, open only on the segment facing the switch column.
+#
+# The physical module measured ~1mm longer along its 65mm (W) axis than
+# the plain FIT_CLEARANCE_XY (0.30mm/side) pocket allowed for -- too
+# tight to seat. SCREEN_LENGTH_EXTRA_CLEARANCE below adds that 1mm
+# entirely on the FAR (+X) side of the pocket, not split evenly: the
+# NEAR (-X) side is flush against the case's own exterior wall (only
+# ~0.3mm of slack before hitting solid material there -- see lip_x0 in
+# build_lid()), so all the growth has to happen on the +X side, which has
+# several mm of open cavity to spare before the switch column.
+SCREEN_LENGTH_EXTRA_CLEARANCE = 1.0  # added to lip_w's W-axis (65mm) span only, +X side
+
+# ---- Screen snap-fit detent -------------------------------------------
+# On top of the plain clearance-fit lip/wall above, add real assembly
+# resistance: a small inward bead on screen_wall's two LONG sides only
+# (the -Y and +Y segments, each spanning the module's full W-axis
+# length) -- the module's rigid top-outer edge cams these chamfered
+# beads outward as the lid is lowered into place, then the wall's own
+# elastic spring-back squeezes the module's sides once seated. Deliberately
+# NOT on the -X segment (already fused solid into the exterior wall, with
+# only ~0.3mm of clearance to flex into -- too tight and not a free
+# cantilever anyway) or the +X segment (already interrupted by
+# SCREEN_WALL_BUTTON_NOTCH_W). Both long sides have >5mm of open cavity
+# beyond them before the next exterior wall (see build_lid()), plenty of
+# room to flex into. Checked separately from the main snap
+# (screen_snap_strain(), section 6) since screen_wall's thickness
+# (SCREEN_WALL_T) and cantilever length (SCREEN_RETENTION_WALL_H, section
+# 5) both differ from the main snap's skirt. Deliberately NOT chamfered
+# like the main bead/groove -- see the detent's own comment in
+# build_lid() for why a lead-in ramp isn't worth it at this scale.
+SCREEN_SNAP_INTERFERENCE = 0.15  # d -- see screen_snap_strain() for margin
+SCREEN_SNAP_BAND_H = 1.0         # height of the detent band along the wall
+SCREEN_SNAP_TIP_OFFSET = 0.3     # how far above screen_wall's own free tip the detent sits (BEAD_TIP_OFFSET's analog)
+SCREEN_SNAP_OVERLAP_EPS = 0.1    # guaranteed-fuse overlap into the wall, same idea as OVERLAP_EPS elsewhere
 
 # ---- Snap-fit geometry (see snap_fit_strain() for the math) ----------
 # d (SNAP_INTERFERENCE) must clear 2*SKIRT_CLEARANCE with real margin: at
@@ -546,6 +589,18 @@ SNAP_TRUE_FLEX_LENGTH = ENGAGE_DEPTH - BEAD_TIP_OFFSET
 # surface -- expected, see the module docstring's SWITCHES note:
 SWITCH_PROTRUSION_ABOVE_CASE = (FLOOR_T + SWITCH_PCB_TOP_Z + SWITCH_HOUSING_ABOVE_PCB) - EXTERNAL_H
 
+# Screen retention wall height (lid-local Z frame, see build_lid()):
+# hoisted to module level (rather than computed inline in build_lid(),
+# the older pattern) so screen_snap_strain() below can use the same
+# cantilever length the actual geometry uses, instead of a second,
+# possibly-drifting copy of the formula.
+SCREEN_WALL_T = 1.5
+SCREEN_WALL_CLEARANCE = 0.3
+SCREEN_RETENTION_WALL_H = (EXTERNAL_H - CEIL_T) - (FLOOR_T + DISPLAY_REST_Z + SCREEN_WALL_CLEARANCE)
+assert SCREEN_RETENTION_WALL_H > 0, (
+    "no room for a screen retention wall above the display's resting height -- "
+    "raise DISPLAY_STANDOFF_H/STACK_TOP_MARGIN or tighten SCREEN_WALL_CLEARANCE")
+
 # USB-C cutout Z (global, from tray bottom): measured from the MCU's own
 # floor-level shelf clearance.
 USB_C_CENTER_Z = FLOOR_T + MCU_SHELF_CLEARANCE + USB_C_CENTER_Z_ABOVE_SHELF
@@ -616,6 +671,28 @@ def snap_fit_strain():
     pass/fail.
     """
     strain = 1.5 * SNAP_INTERFERENCE * SNAP_SKIRT_T / (SNAP_TRUE_FLEX_LENGTH ** 2)
+    allowable = ELONGATION_AT_BREAK * SNAP_STRAIN_SAFETY_FRACTION
+    margin_pct = (allowable - strain) / strain * 100.0 if strain else float("inf")
+    return {
+        "strain": strain,
+        "allowable": allowable,
+        "passes": strain <= allowable,
+        "margin_pct": margin_pct,
+    }
+
+
+def screen_snap_strain():
+    """Same cantilever-beam formula as snap_fit_strain() above, applied to
+    the screen retention wall's own detent (section 3's "Screen snap-fit
+    detent") instead of the main tray/lid snap: fixed end where
+    screen_wall meets the ceiling, free tip at the wall's bottom edge,
+    true flex length = SCREEN_RETENTION_WALL_H minus SCREEN_SNAP_TIP_OFFSET
+    (the detent sits near the free tip, not at it, same convention as
+    BEAD_TIP_OFFSET), thickness SCREEN_WALL_T. Checked separately from
+    snap_fit_strain() because both t and L differ from the main snap's
+    skirt/bead."""
+    true_flex_length = SCREEN_RETENTION_WALL_H - SCREEN_SNAP_TIP_OFFSET
+    strain = 1.5 * SCREEN_SNAP_INTERFERENCE * SCREEN_WALL_T / (true_flex_length ** 2)
     allowable = ELONGATION_AT_BREAK * SNAP_STRAIN_SAFETY_FRACTION
     margin_pct = (allowable - strain) / strain * 100.0 if strain else float("inf")
     return {
@@ -1152,7 +1229,11 @@ def build_lid():
         "or STACK_TOP_MARGIN")
     lip_x0 = WALL_T + SCREEN_X0 - FIT_CLEARANCE_XY
     lip_y0 = WALL_T + SCREEN_Y0 - FIT_CLEARANCE_XY
-    lip_w = SCREEN_W + 2 * FIT_CLEARANCE_XY
+    # SCREEN_LENGTH_EXTRA_CLEARANCE added entirely on the +X (far) side --
+    # lip_x0 above is unchanged, so all the extra room appears at the
+    # lip_x0+lip_w end. See its own comment (section 3) for why: the -X
+    # side is already flush against the exterior wall with no slack.
+    lip_w = SCREEN_W + 2 * FIT_CLEARANCE_XY + SCREEN_LENGTH_EXTRA_CLEARANCE
     lip_d = SCREEN_L + 2 * FIT_CLEARANCE_XY
     lip_z0 = LID_EXTERNAL_H - CEIL_T - SCREEN_LIP_H
     lip_outer = Part.makeBox(lip_w, lip_d, SCREEN_LIP_H, Vector(lip_x0, lip_y0, lip_z0))
@@ -1177,12 +1258,9 @@ def build_lid():
     # Z-range: from just above DISPLAY_REST_Z (plus SCREEN_WALL_CLEARANCE
     # of assembly-tolerance headroom) up to the ceiling -- the display has
     # nothing else in the tray at that Z range to collide with (section 5).
-    SCREEN_WALL_T = 1.5
-    SCREEN_WALL_CLEARANCE = 0.3
-    SCREEN_RETENTION_WALL_H = (EXTERNAL_H - CEIL_T) - (FLOOR_T + DISPLAY_REST_Z + SCREEN_WALL_CLEARANCE)
-    assert SCREEN_RETENTION_WALL_H > 0, (
-        "no room for a screen retention wall above the display's resting height -- "
-        "raise DISPLAY_STANDOFF_H/STACK_TOP_MARGIN or tighten SCREEN_WALL_CLEARANCE")
+    # SCREEN_WALL_T/SCREEN_WALL_CLEARANCE/SCREEN_RETENTION_WALL_H are
+    # module-level now (section 5) so screen_snap_strain() can share the
+    # exact same cantilever length this geometry uses.
     screen_wall_z0 = LID_EXTERNAL_H - CEIL_T - SCREEN_RETENTION_WALL_H
     screen_wall_outer = rounded_box(
         lip_w + 2 * SCREEN_WALL_T, lip_d + 2 * SCREEN_WALL_T, SCREEN_RETENTION_WALL_H, 1.0,
@@ -1204,6 +1282,33 @@ def build_lid():
         SCREEN_WALL_T + 1.0, SCREEN_WALL_BUTTON_NOTCH_W, SCREEN_RETENTION_WALL_H + 2,
         Vector(notch_x0, notch_y0, screen_wall_z0 - 1))
     screen_wall = screen_wall.cut(notch_cutter)
+
+    # Screen snap-fit detent (section 3): two straight bars on the wall's
+    # -Y and +Y inner faces only (see that section's comment for why not
+    # all 4 sides), near screen_wall's own free tip -- SCREEN_SNAP_TIP_OFFSET
+    # short of it, same "push the bead near the free end so the strain
+    # formula's flex length is nearly the full cantilever" logic as the
+    # main snap's BEAD_Z0 (build_tray()). Plain boxes, deliberately NOT
+    # chamfered like the main bead/groove: at SCREEN_SNAP_INTERFERENCE's
+    # scale (0.15mm), a lead-in bevel would be smaller than this printer's
+    # resolvable feature size and risks a degenerate OCCT chamfer on such
+    # a thin (0.15mm-proud) bump -- a square-edged bump is both safer to
+    # generate and, if anything, gives slightly MORE of the "push it home"
+    # resistance that's the actual point here. Each bar reaches
+    # SCREEN_SNAP_OVERLAP_EPS INTO the wall (guaranteed volumetric fuse,
+    # same coincident-face workaround as OVERLAP_EPS elsewhere) and
+    # SCREEN_SNAP_INTERFERENCE beyond the wall's inner face, into the
+    # pocket -- that's the actual interference the rigid module has to
+    # push past on the way in.
+    snap_z0 = screen_wall_z0 + SCREEN_SNAP_TIP_OFFSET
+    near_bar = Part.makeBox(
+        lip_w, SCREEN_SNAP_INTERFERENCE + SCREEN_SNAP_OVERLAP_EPS, SCREEN_SNAP_BAND_H,
+        Vector(lip_x0, lip_y0 - SCREEN_SNAP_OVERLAP_EPS, snap_z0))
+    far_bar = Part.makeBox(
+        lip_w, SCREEN_SNAP_INTERFERENCE + SCREEN_SNAP_OVERLAP_EPS, SCREEN_SNAP_BAND_H,
+        Vector(lip_x0, lip_y0 + lip_d - SCREEN_SNAP_INTERFERENCE, snap_z0))
+    screen_wall = screen_wall.fuse(near_bar).fuse(far_bar)
+
     lid = lid.fuse(screen_wall)
 
     # Switch plate holes: each button's opening is LID_BUTTON_HOLE (19mm)
@@ -1297,6 +1402,7 @@ def rounded_edge_chamfer(shape, z_level, sizes, direction):
 
 def print_summary():
     snap = snap_fit_strain()
+    screen_snap = screen_snap_strain()
     print("=" * 72)
     print("ESP32-S3 PORTABLE CASE -- computed dimensions")
     print("=" * 72)
@@ -1345,6 +1451,17 @@ def print_summary():
         snap["allowable"] * 100, SNAP_STRAIN_SAFETY_FRACTION * 100, ELONGATION_AT_BREAK * 100))
     print("result            : %s (%.0f%% margin)" % ("PASS" if snap["passes"] else "FAIL -- reduce interference or increase flex length", snap["margin_pct"]))
     print()
+    print("-- Screen snap-fit detent strain check (same formula, screen_wall's own bars) --")
+    print("wall cantilever (SCREEN_RETENTION_WALL_H) = %.2f mm, true flex length L (minus" % SCREEN_RETENTION_WALL_H)
+    print("  SCREEN_SNAP_TIP_OFFSET) = %.2f mm, wall thickness t = %.2f mm, interference d = %.2f mm" % (
+        SCREEN_RETENTION_WALL_H - SCREEN_SNAP_TIP_OFFSET, SCREEN_WALL_T, SCREEN_SNAP_INTERFERENCE))
+    print("computed strain   : %.2f%%" % (screen_snap["strain"] * 100))
+    print("allowable strain  : %.2f%% (= %.0f%% of %.1f%% elongation-at-break)" % (
+        screen_snap["allowable"] * 100, SNAP_STRAIN_SAFETY_FRACTION * 100, ELONGATION_AT_BREAK * 100))
+    print("result            : %s (%.0f%% margin)" % (
+        "PASS" if screen_snap["passes"] else "FAIL -- reduce interference or move the detent nearer the free tip",
+        screen_snap["margin_pct"]))
+    print()
     print("-- Assumed / generic figures (not in HARDWARE.md) --")
     for name, val, note in [
         ("Display module thickness", DISPLAY_THICKNESS, "e-paper HAT glass+PCB, no pin header assumed"),
@@ -1376,6 +1493,9 @@ def print_summary():
     print("      more durable snap; re-run with ELONGATION_AT_BREAK adjusted to check margin.")
     print("  [ ] Slice with >=3 perimeters on the lid skirt / tray bead region so the")
     print("      %.1fmm flex wall is solid, not sparse-infill." % SNAP_SKIRT_T)
+    print("  [ ] Same for the screen retention wall (screen_wall, %.1fmm thick) -- the" % SCREEN_WALL_T)
+    print("      new %.2fmm snap detent on its long sides needs solid perimeters too," % SCREEN_SNAP_INTERFERENCE)
+    print("      not sparse infill, to actually flex/spring instead of just crushing.")
     print("  [ ] The display is adhesive/foam-tape mounted with no posts, shelves, or")
     print("      walls holding it up in the tray -- make sure the adhesive bond is solid")
     print("      before closing the case; nothing else registers its vertical position.")
@@ -1399,6 +1519,9 @@ def main():
     if not snap_fit_strain()["passes"]:
         print("WARNING: snap-fit strain check FAILS with current constants -- "
               "the geometry will still be generated, but see print_summary().")
+    if not screen_snap_strain()["passes"]:
+        print("WARNING: screen snap-fit detent strain check FAILS with current "
+              "constants -- the geometry will still be generated, but see print_summary().")
 
     print_summary()
 
