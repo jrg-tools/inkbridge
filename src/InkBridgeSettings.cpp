@@ -16,7 +16,6 @@ void InkBridgeSettings::load() {
   haHost = prefs.getString("haHost", haHost);
   haPort = prefs.getInt("haPort", haPort);
   haToken = prefs.getString("haToken", "");
-  haEntities = prefs.getString("haEntities", haEntities);
   haScripts = prefs.getString("haScripts", haScripts);
   language = prefs.getString("language", language);
   fontFamily = prefs.getString("fontFamily", fontFamily);
@@ -33,7 +32,6 @@ void InkBridgeSettings::save() const {
   prefs.putString("haHost", haHost);
   prefs.putInt("haPort", haPort);
   prefs.putString("haToken", haToken);
-  prefs.putString("haEntities", haEntities);
   prefs.putString("haScripts", haScripts);
   prefs.putString("language", language);
   prefs.putString("fontFamily", fontFamily);
@@ -41,20 +39,6 @@ void InkBridgeSettings::save() const {
   prefs.putString("apPassword", apPassword);
   prefs.end();
   Serial.println("[Settings] saved");
-}
-
-std::vector<String> InkBridgeSettings::entityIds() const {
-  std::vector<String> ids;
-  int start = 0;
-  while (start < (int)haEntities.length()) {
-    int comma = haEntities.indexOf(',', start);
-    if (comma < 0) comma = haEntities.length();
-    String id = haEntities.substring(start, comma);
-    id.trim();
-    if (id.length()) ids.push_back(id);
-    start = comma + 1;
-  }
-  return ids;
 }
 
 std::vector<InkBridgeSettings::ScriptButton> InkBridgeSettings::scripts() const {

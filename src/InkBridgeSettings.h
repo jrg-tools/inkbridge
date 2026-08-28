@@ -23,13 +23,11 @@ class InkBridgeSettings {
   String haHost = "homeassistant.local";
   int haPort = 8123;
   String haToken;
-  // Comma-separated entity ids (reserved for future device-side use).
-  String haEntities = "light.kitchen,light.living_room,switch.fan";
 
   // A script quick-action button shown in the main menu's Scripts list.
   // `id` is the part after "script." — run via script.turn_on + entity_id.
-  // `icon` selects a built-in device icon ("bulb"/"toggle"/"moon"/"bolt";
-  // unknown/empty falls back to "bolt").
+  // `icon` selects a built-in device icon (see Icons::byKey for the full
+  // key list); unknown/empty falls back to the generic bolt.
   struct ScriptButton {
     String label;
     String id;
@@ -51,7 +49,6 @@ class InkBridgeSettings {
   void save() const;
 
   bool hasWifi() const { return !wifis().empty(); }
-  std::vector<String> entityIds() const;
   std::vector<ScriptButton> scripts() const;
   std::vector<WifiNetwork> wifis() const;
 

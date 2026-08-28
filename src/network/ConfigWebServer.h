@@ -16,7 +16,6 @@ class ConfigWebServer {
   void begin(bool apMode);
   void stop();
   void loop();
-  bool isRunning() const { return server != nullptr; }
 
   // True if any ConfigWebServer instance anywhere is currently serving —
   // main.cpp checks this before sleeping, so it never naps out from under

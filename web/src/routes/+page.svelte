@@ -35,7 +35,6 @@
 		wifiNetworks: WifiNetworkSetting[];
 		haHost: string;
 		haPort: number;
-		haEntities: string;
 		haScripts: ScriptButtonSetting[];
 	}
 
@@ -84,7 +83,6 @@
 		wifiNetworks: [],
 		haHost: '',
 		haPort: 8123,
-		haEntities: '',
 		haScripts: []
 	});
 	let deviceSettings = $state<DeviceSettings>({
@@ -456,16 +454,6 @@
 						connection may still differ.
 					</p>
 				</div>
-				<div class="field">
-					<label for="ha-entities">Entities (comma-separated)</label>
-					<input
-						id="ha-entities"
-						type="text"
-						bind:value={transfer.haEntities}
-						placeholder="sensor.temp, light.desk"
-					/>
-				</div>
-
 				<h3 class="subsection-title">Scripts</h3>
 				<p class="hint-small">
 					Each entry becomes a button in the device's main menu, in this order. Script ID is
