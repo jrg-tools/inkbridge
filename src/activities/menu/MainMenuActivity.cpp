@@ -1,5 +1,6 @@
 #include "MainMenuActivity.h"
 
+#include "../../IdleSleep.h"
 #include "../../components/Icons.h"
 #include "../ActivityManager.h"
 #include "../scripts/ScriptRunActivity.h"
@@ -17,7 +18,7 @@ int MainMenuActivity::cellSize() const {
 void MainMenuActivity::render() {
   auto& g = display.gfx();
   g.fillScreen(GxEPD_WHITE);
-  UiChrome::drawHeader(nullptr, /*idleSleepEligible=*/true);
+  UiChrome::drawHeader(nullptr, IdleSleep::nearTimeout());
 
   int size = cellSize();
   int count = rowCount();

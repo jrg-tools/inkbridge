@@ -10,12 +10,13 @@ class UiChrome {
   // Screen title in the top-left, bold, with a short rule underneath (just
   // the title's width) so a submenu makes clear which screen it is.
   // Omit/empty for a blank title (e.g. the root menu, which needs no "you
-  // are here"). Right side always shows a status icon regardless of title:
-  // a lightning bolt when USB is plugged in (native-USB SOF detection —
-  // only fires for an actual host like a computer, not a plain power
-  // brick with no data lines), else a moon when `idleSleepEligible` (the
-  // one screen the idle-sleep timer actually applies to — see main.cpp).
-  static void drawHeader(const char* title = nullptr, bool idleSleepEligible = false) {
+  // are here"). Right side is blank by default and only ever shows one of
+  // two transient status icons: a lightning bolt when USB is plugged in
+  // (native-USB SOF detection — only fires for an actual host like a
+  // computer, not a plain power brick with no data lines), else a moon
+  // when `nearSleep` (the main menu passes this only in the short window
+  // right before it actually naps — see IdleSleep.h).
+  static void drawHeader(const char* title = nullptr, bool nearSleep = false) {
     auto& g = display.gfx();
     auto& t = display.text();
     t.setFont(UITheme::FONT_SMALL);
@@ -35,7 +36,7 @@ class UiChrome {
     int iconCx = g.width() - 9, iconCy = UITheme::HEADER_H / 2;
     if (Serial.isPlugged()) {
       Icons::zapSmall(g, iconCx, iconCy, GxEPD_BLACK);
-    } else if (idleSleepEligible) {
+    } else if (nearSleep) {
       Icons::moonSmall(g, iconCx, iconCy, GxEPD_BLACK);
     }
   }

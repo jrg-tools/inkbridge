@@ -10,6 +10,7 @@
 #include <esp_sleep.h>
 #include <string.h>
 
+#include "IdleSleep.h"
 #include "InkBridgeSettings.h"
 #include "Version.h"
 #include "activities/ActivityManager.h"
@@ -27,17 +28,16 @@ namespace {
 // wakeup) isn't available on this wiring; light sleep's GPIO wakeup works on
 // any digital pin and still preserves all state, so waking just resumes
 // loop() normally.
-constexpr uint32_t IDLE_SLEEP_MS = 5 * 60 * 1000;
-uint32_t lastActivityMs = 0;
 
-// The header's status icon (moon/lightning bolt) only reflects USB plug
+// The header's status icons (moon/lightning bolt) only reflect current
 // state when something else triggers a redraw — a button press, or a
-// screen change. Left alone, the icon would go stale the moment the cable
-// is (un)plugged in the background, or even just briefly after boot (native
-// USB detection isn't instant). Poll for a change and, if seen, refresh
-// just that corner — cheap to check every loop(), and only touches the
-// display on an actual transition.
+// screen change. Left alone, an icon would go stale the moment the USB
+// cable is (un)plugged in the background, or once the idle timer crosses
+// into its pre-sleep warning window with nothing pressed in the meantime.
+// Poll both for a change and, if seen, refresh just that corner — cheap to
+// check every loop(), and only touches the display on an actual transition.
 bool lastUsbPlugged = false;
+bool lastNearSleep = false;
 
 void enterLightSleep() {
   Serial.println("[Main] idle — light sleep until a button is pressed");
@@ -76,29 +76,34 @@ void setup() {
   display.refresh(drawSplash, HalDisplay::FULL_REFRESH);
 
   activityManager.replaceActivity(std::make_unique<MainMenuActivity>());
-  lastActivityMs = millis();
+  IdleSleep::noteActivity();
   lastUsbPlugged = Serial.isPlugged();
   Serial.println("[Main] inkbridge ready");
 }
 
 void loop() {
   gpio.update();
-  if (gpio.anyEventThisFrame()) lastActivityMs = millis();
+  if (gpio.anyEventThisFrame()) IdleSleep::noteActivity();
   activityManager.loop();
 
   Activity* current = activityManager.getCurrentActivity();
+  bool onRootMenu = current && strcmp(current->getName(), "MainMenu") == 0;
 
+  // The moon hint only ever applies on the root menu (the only screen the
+  // idle-sleep timer runs on), so a stale flag elsewhere is harmless — it's
+  // never read outside that screen's own render().
   bool usbPlugged = Serial.isPlugged();
-  if (usbPlugged != lastUsbPlugged && current) {
+  bool nearSleep = onRootMenu && IdleSleep::nearTimeout();
+  if (current && (usbPlugged != lastUsbPlugged || nearSleep != lastNearSleep)) {
     lastUsbPlugged = usbPlugged;
+    lastNearSleep = nearSleep;
     display.refreshRegion(display.width() - 20, 0, 20, UITheme::HEADER_H,
                            [current] { current->render(); });
   }
 
-  bool onRootMenu = current && strcmp(current->getName(), "MainMenu") == 0;
-  if (onRootMenu && millis() - lastActivityMs > IDLE_SLEEP_MS) {
+  if (onRootMenu && IdleSleep::timedOut()) {
     enterLightSleep();
-    lastActivityMs = millis();
+    IdleSleep::noteActivity();
   }
 
   delay(10);
