@@ -90,16 +90,17 @@ bool HomeAssistantClient::updateTodoItem(const String& entityId, const String& u
 }
 
 bool HomeAssistantClient::listTodoEntities(std::vector<TodoListInfo>& outLists) {
-  // `list.append(...)` mutation (rather than reassigning `result` inside the
-  // loop) is the standard idiom for building a list across Jinja's per-
-  // iteration scope in HA templates. `s.name` is the state's frontend
-  // display name (falls back to the entity id if no friendly_name is set).
+  // Built with map/zip/dict only — no `list.append()`/similar mutation.
+  // HA's Jinja environment is sandboxed and rejects calling mutating methods
+  // (a prior version of this used `{% set _ = result.append(...) %}`, which
+  // renders fine in plain Jinja2 but gets a 400 from HA specifically because
+  // of that sandboxing). `dict(zip(keys, values))` builds the {id: name}
+  // mapping with only pure, always-permitted operations — a pattern
+  // documented in HA's own templating docs. `s.name` is the state's
+  // frontend display name (falls back to the entity id if unset).
   static const char* TEMPLATE =
-      "{% set result = [] %}"
-      "{% for s in states.todo %}"
-      "{% set _ = result.append({'id': s.entity_id, 'name': s.name}) %}"
-      "{% endfor %}"
-      "{{ result | tojson }}";
+      "{{ dict(zip(states.todo | map(attribute='entity_id') | list, "
+      "states.todo | map(attribute='name') | list)) | tojson }}";
 
   JsonDocument reqDoc;
   reqDoc["template"] = TEMPLATE;
@@ -113,23 +114,22 @@ bool HomeAssistantClient::listTodoEntities(std::vector<TodoListInfo>& outLists) 
   http.addHeader("Content-Type", "application/json");
 
   int code = http.POST(payload);
-  if (code != 200) {
-    Serial.printf("[HA] template -> %d\n", code);
-    http.end();
-    return false;
-  }
   String body = http.getString();
   http.end();
+  if (code != 200) {
+    Serial.printf("[HA] template -> %d: %s\n", code, body.c_str());
+    return false;
+  }
 
   JsonDocument doc;
   if (deserializeJson(doc, body) != DeserializationError::Ok) {
     Serial.println("[HA] template: invalid JSON response");
     return false;
   }
-  for (JsonObjectConst entry : doc.as<JsonArrayConst>()) {
+  for (JsonPairConst kv : doc.as<JsonObjectConst>()) {
     TodoListInfo info;
-    info.entityId = entry["id"] | "";
-    info.name = entry["name"] | "";
+    info.entityId = kv.key().c_str();
+    info.name = kv.value() | "";
     if (info.entityId.length()) outLists.push_back(info);
   }
   return true;

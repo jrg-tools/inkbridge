@@ -35,7 +35,7 @@ void ConfigWebServer::begin(bool ap) {
   server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
   server->on("/api/settings", HTTP_GET, [this] { handleGetSettings(); });
   server->on("/api/settings", HTTP_POST, [this] { handlePostSettings(); });
-  server->on("/api/ha/todo-lists", HTTP_GET, [this] { handleHaTodoLists(); });
+  server->on("/api/ha/todo-lists", HTTP_POST, [this] { handleHaTodoLists(); });
   server->on("/api/restart", HTTP_POST, [this] { handleRestart(); });
   // Everything else falls through to the SvelteKit build on LittleFS.
   server->onNotFound([this] { handleNotFound(); });
@@ -200,11 +200,27 @@ void ConfigWebServer::handlePostSettings() {
 }
 
 void ConfigWebServer::handleHaTodoLists() {
-  // Uses whatever host/token are already persisted on the device — not any
-  // unsaved edits sitting in the web UI's form — since the whole point is
-  // that the browser shouldn't need its own copy of the token to do this.
+  // Defaults to whatever's already persisted on the device, but accepts an
+  // optional JSON body ({haHost, haPort, haToken}, any subset) so the web UI
+  // can test unsaved form edits before committing them — without the
+  // browser ever making the HA call itself, or needing a copy of a token
+  // that's already stored. A blank/absent field just falls back to what's
+  // saved, same "blank = unchanged" convention as /api/settings.
+  String host = SETTINGS.haHost;
+  int port = SETTINGS.haPort;
+  String token = SETTINGS.haToken;
+
+  JsonDocument body;
+  if (deserializeJson(body, server->arg("plain")) == DeserializationError::Ok) {
+    const char* h = body["haHost"];
+    if (h && h[0]) host = h;
+    if (body["haPort"].is<int>()) port = body["haPort"].as<int>();
+    const char* t = body["haToken"];
+    if (t && t[0]) token = t;
+  }
+
   HomeAssistantClient haClient;
-  haClient.begin(SETTINGS.haHost, SETTINGS.haPort, SETTINGS.haToken);
+  haClient.begin(host, port, token);
 
   std::vector<HomeAssistantClient::TodoListInfo> lists;
   if (!haClient.listTodoEntities(lists)) {

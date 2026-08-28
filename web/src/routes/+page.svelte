@@ -225,15 +225,25 @@
 	}
 
 	// Populates the Shopping list entity dropdown from HA's actual `todo.*`
-	// entities. Goes through the device's own /api/ha/todo-lists, which
-	// proxies the HA call using its already-stored host/token, rather than
-	// fetching HA directly from the browser — so this only ever reflects
-	// whatever's currently saved on the device, not unsaved form edits.
+	// entities. Goes through the device's own /api/ha/todo-lists — it makes
+	// the HA call, not the browser — passing the form's current host/port
+	// and (if freshly typed) token as overrides, so this can test unsaved
+	// edits without saving/restarting first; a blank token falls back to
+	// whatever's already stored on the device, same as save() does.
 	async function fetchTodoLists() {
 		fetchListsError = '';
 		fetchingLists = true;
 		try {
-			const res = await fetch('/api/ha/todo-lists');
+			const body: Record<string, string | number> = {
+				haHost: transfer.haHost,
+				haPort: transfer.haPort
+			};
+			if (haToken) body.haToken = haToken;
+			const res = await fetch('/api/ha/todo-lists', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
 			if (!res.ok) {
 				fetchListsError = (await res.text()) || `Unexpected response: HTTP ${res.status}`;
 				return;
@@ -529,8 +539,9 @@
 						<p class="hint-small test-result error">{fetchListsError}</p>
 					{/if}
 					<p class="hint-small">
-						Fetched through the device using its already-saved host and token — save those
-						first if you haven't yet, since unsaved changes here aren't used.
+						Fetched through the device (not this browser), using the host/port above and,
+						if you've typed one, the token above too — otherwise the device's already-saved
+						token is used.
 					</p>
 				</div>
 

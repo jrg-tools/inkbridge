@@ -7,10 +7,11 @@
 //   GET  /api/status       {"version","ip","mode","rssi","freeHeap","uptime"}
 //   GET  /api/settings     current settings JSON (secrets omitted)
 //   POST /api/settings     JSON body, applies + persists via SETTINGS
-//   GET  /api/ha/todo-lists  [{"id","name"}] of HA's `todo.*` entities —
-//                            proxied through the device (using its already-
-//                            stored host/token) so the browser never needs
-//                            its own copy of the token
+//   POST /api/ha/todo-lists  [{"id","name"}] of HA's `todo.*` entities —
+//                            proxied through the device, not the browser;
+//                            optional JSON body {haHost,haPort,haToken} lets
+//                            the web UI test unsaved edits, else falls back
+//                            to whatever's already stored
 //   POST /api/restart      reboots the device
 // All other paths are served from the SvelteKit build on LittleFS (web/,
 // deployed with `pnpm deploy` + `pio run -t uploadfs`).
