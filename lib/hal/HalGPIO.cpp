@@ -89,3 +89,18 @@ void HalGPIO::prepareForSleep() const {
   }
   esp_sleep_enable_gpio_wakeup();
 }
+
+void HalGPIO::resetState() {
+  uint32_t now = millis();
+  for (auto& b : buttons) {
+    b.stable = false;
+    b.rawLast = false;
+    b.longFired = false;
+    b.shortEvent = false;
+    b.longEvent = false;
+    b.lastChangeMs = now;
+    b.pressedAtMs = 0;
+    b.isrLatchCount = 0;
+    b.isrLatchMs = now;
+  }
+}

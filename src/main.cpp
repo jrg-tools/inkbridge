@@ -44,7 +44,8 @@ void enterLightSleep() {
   Serial.flush();
   gpio.prepareForSleep();
   esp_light_sleep_start();
-  gpio.begin();  // sleep's GPIO wakeup config overwrote the FALLING-edge ISR setup
+  gpio.begin();       // sleep's GPIO wakeup config overwrote the FALLING-edge ISR setup
+  gpio.resetState();  // discard the waking press itself — see HalGPIO::resetState()
   Serial.println("[Main] woke up");
 }
 

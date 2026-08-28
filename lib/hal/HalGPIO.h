@@ -31,6 +31,15 @@ class HalGPIO {
   // waking to restore the normal FALLING-edge interrupt config.
   void prepareForSleep() const;
 
+  // Discards all debounce/latch state, including any queued isrLatchCount.
+  // Call right after waking from sleep: arming the GPIO wakeup source
+  // reprograms the same interrupt-type register the normal FALLING-edge
+  // ISR uses, so it fires repeatedly (level-triggered) for as long as the
+  // waking press is held — without this, that gets replayed as several
+  // phantom short-presses once polling resumes. The press that woke the
+  // device is consumed for waking only, not treated as input.
+  void resetState();
+
  private:
   struct ButtonState {
     int pin = -1;
