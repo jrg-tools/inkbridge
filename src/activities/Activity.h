@@ -27,8 +27,6 @@ class Activity {
     if (mode == HalDisplay::FULL_REFRESH) fullRefreshRequested = true;
   }
 
-  const char* getName() const { return name; }
-
  protected:
   const char* name;
 

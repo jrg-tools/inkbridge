@@ -28,7 +28,6 @@ class I18n {
   }
 
   void setLanguage(Lang l) { lang = l; }
-  Lang language() const { return lang; }
 
   const char* get(StrId id) const {
     return TABLE[(int)lang][(int)id];

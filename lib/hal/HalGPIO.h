@@ -30,9 +30,6 @@ class HalGPIO {
   bool wasLongPressed(uint8_t btn) const;   // held past LONG_PRESS_MS (once)
   bool anyEventThisFrame() const;           // any short/long press, either button
 
-  bool isPressed(uint8_t btn) const;                   // currently held (debounced)
-  bool isHeldFor(uint8_t btn, uint32_t ms) const;       // held continuously for at least ms
-
   // Arms both button GPIOs as light-sleep wake sources (neither pin is RTC-
   // capable, so deep sleep's ext0/ext1 wakeup can't be used here — light
   // sleep's GPIO wakeup works on any digital pin). Call begin() again after

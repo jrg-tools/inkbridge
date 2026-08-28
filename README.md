@@ -20,7 +20,7 @@ A minimal, always-on **Home Assistant script launcher** on an e-ink display. Two
 - A 2-column grid of icon-only buttons — each one a script configured in Home Assistant (lights, scenes, "goodnight" routines, whatever you script). Press it, it runs, done.
 - Configure everything — WiFi networks (with automatic fallback), Home Assistant host/token, the script buttons and their icons, hotspot credentials, language, even the device's font — from a web UI the device serves itself.
 - Multiple saved WiFi networks: tried in priority order until one connects, so it isn't stuck if you move it between locations.
-- Idle **light sleep** after 5 minutes on any screen except while the config web UI is being used, waking instantly on either button (or forcibly, by holding the action button for 10s). The header shows a small status icon (moon = about to nap, lightning = USB connected) that stays in sync even without touching a button.
+- Idle **light sleep** after 5 minutes on any screen except while the config web UI is being used, waking instantly on either button. The header shows a small status icon (moon = about to nap, lightning = USB connected) that stays in sync even without touching a button.
 
 Architecture follows [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader): HAL singletons, an Android-style Activity stack for screens, a persisted settings singleton, an API-first web server, and — for the icon set — the same idea of rasterizing stock [Lucide](https://lucide.dev) icons to 1-bit bitmaps rather than hand-drawing vector shapes.
 
@@ -50,7 +50,7 @@ Architecture follows [CrossPoint Reader](https://github.com/crosspoint-reader/cr
 
 ### Power
 
-- **Idle light sleep**: after 5 minutes untouched, the device drops into light sleep (`esp_light_sleep_start`) and wakes instantly on either button press. Skipped while the config web server is running (AP setup or a connected WiFi session), so it never naps mid-configuration. Holding the action button (B) for 10s forces sleep immediately instead of waiting out the idle timer.
+- **Idle light sleep**: after 5 minutes untouched, the device drops into light sleep (`esp_light_sleep_start`) and wakes instantly on either button press. Skipped while the config web server is running (AP setup or a connected WiFi session), so it never naps mid-configuration.
 - **No deep sleep**: true deep sleep wakeup (`ext0`/`ext1`) needs RTC-capable GPIOs (0–21 on the S3); the buttons are wired to GPIO43/44 (the UART pins), which aren't RTC pins. Light sleep's GPIO wakeup works on any digital pin instead, and has the added benefit of preserving all RAM state across the nap.
 - **Rough battery life**: active draw is tens of mA; light sleep drops that to roughly 0.25–1 mA. At typical "check it a dozen-ish times a day" usage, that's on the order of 2–3 weeks per charge; left almost untouched, more like a month or two. Frequent short interactions cost more than you'd expect, since each one keeps it awake for the full 5-minute idle window afterward, not just the interaction itself.
 - **Charging**: the XIAO's onboard charge management fast-charges at a fixed 100mA regardless of what the USB-C source can supply. For the 1100mAh cell here, that's roughly **11–14 hours** empty to full.

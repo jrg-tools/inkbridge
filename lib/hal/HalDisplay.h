@@ -44,7 +44,6 @@ class HalDisplay {
   TextRenderer& text() { return u8f; }
 
   int width() { return epd.width(); }
-  int height() { return epd.height(); }
 
   // Runs drawFrame for each display page and refreshes. FAST_REFRESH is
   // silently promoted to FULL_REFRESH on cadence.

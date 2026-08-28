@@ -48,7 +48,6 @@ class InkBridgeSettings {
   void load();
   void save() const;
 
-  bool hasWifi() const { return !wifis().empty(); }
   std::vector<ScriptButton> scripts() const;
   std::vector<WifiNetwork> wifis() const;
 

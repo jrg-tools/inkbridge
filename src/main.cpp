@@ -22,19 +22,13 @@ HalGPIO gpio;
 ActivityManager activityManager;
 
 namespace {
-// Sleep (idle-timeout or the manual hold below) is allowed on any screen
-// except while the config web server is running (ConfigWebServer::anyRunning
-// — set by whichever screen started it, AP setup or a connected Wi-Fi
-// session) — never nap out from under someone actively using the web UI.
-// Neither button GPIO is RTC-capable, so true deep sleep (ext0/ext1 wakeup)
-// isn't available on this wiring; light sleep's GPIO wakeup works on any
-// digital pin and still preserves all state, so waking just resumes loop()
-// normally.
-
-// Hold the action button (B) this long to force sleep immediately, without
-// waiting for the idle timeout.
-constexpr uint32_t FORCE_SLEEP_HOLD_MS = 10000;
-bool pendingForceSleep = false;
+// Sleep (idle-timeout) is allowed on any screen except while the config web
+// server is running (ConfigWebServer::anyRunning — set by whichever screen
+// started it, AP setup or a connected Wi-Fi session) — never nap out from
+// under someone actively using the web UI. Neither button GPIO is RTC-
+// capable, so true deep sleep (ext0/ext1 wakeup) isn't available on this
+// wiring; light sleep's GPIO wakeup works on any digital pin and still
+// preserves all state, so waking just resumes loop() normally.
 
 // The header's status icons (moon/lightning bolt) only reflect current
 // state when something else triggers a redraw — a button press, or a
@@ -106,19 +100,6 @@ void loop() {
     lastNearSleep = nearSleep;
     display.refreshRegion(display.width() - 20, 0, 20, UITheme::HEADER_H,
                            [current] { current->render(); });
-  }
-
-  // Hold the action button 10s to force sleep immediately. Waits for
-  // release before actually sleeping — sleeping while the wake-trigger pin
-  // is still held low would satisfy the wake condition instantly, causing
-  // a spurious immediate wake right back up.
-  if (sleepEligible && gpio.isHeldFor(HalGPIO::BTN_B, FORCE_SLEEP_HOLD_MS)) {
-    pendingForceSleep = true;
-  }
-  if (pendingForceSleep && !gpio.isPressed(HalGPIO::BTN_B)) {
-    pendingForceSleep = false;
-    enterLightSleep();
-    IdleSleep::noteActivity();
   }
 
   if (sleepEligible && IdleSleep::timedOut()) {

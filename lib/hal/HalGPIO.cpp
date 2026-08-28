@@ -83,13 +83,6 @@ bool HalGPIO::anyEventThisFrame() const {
   return false;
 }
 
-bool HalGPIO::isPressed(uint8_t btn) const { return buttons[btn].stable; }
-
-bool HalGPIO::isHeldFor(uint8_t btn, uint32_t ms) const {
-  const auto& b = buttons[btn];
-  return b.stable && (millis() - b.pressedAtMs) >= ms;
-}
-
 void HalGPIO::prepareForSleep() const {
   for (const auto& b : buttons) {
     gpio_wakeup_enable((gpio_num_t)b.pin, GPIO_INTR_LOW_LEVEL);
