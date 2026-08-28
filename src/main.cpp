@@ -8,7 +8,6 @@
 #include <HalDisplay.h>
 #include <HalGPIO.h>
 #include <esp_sleep.h>
-#include <string.h>
 
 #include "IdleSleep.h"
 #include "InkBridgeSettings.h"
@@ -16,18 +15,26 @@
 #include "activities/ActivityManager.h"
 #include "activities/menu/MainMenuActivity.h"
 #include "components/UITheme.h"
+#include "network/ConfigWebServer.h"
 
 HalDisplay display;
 HalGPIO gpio;
 ActivityManager activityManager;
 
 namespace {
-// Only sleeps while idle on the root menu — WiFi is always off there, and it
-// avoids cutting off an in-progress WiFi connect/config flow on another
-// screen. Neither button GPIO is RTC-capable, so true deep sleep (ext0/ext1
-// wakeup) isn't available on this wiring; light sleep's GPIO wakeup works on
-// any digital pin and still preserves all state, so waking just resumes
-// loop() normally.
+// Sleep (idle-timeout or the manual hold below) is allowed on any screen
+// except while the config web server is running (ConfigWebServer::anyRunning
+// — set by whichever screen started it, AP setup or a connected Wi-Fi
+// session) — never nap out from under someone actively using the web UI.
+// Neither button GPIO is RTC-capable, so true deep sleep (ext0/ext1 wakeup)
+// isn't available on this wiring; light sleep's GPIO wakeup works on any
+// digital pin and still preserves all state, so waking just resumes loop()
+// normally.
+
+// Hold the action button (B) this long to force sleep immediately, without
+// waiting for the idle timeout.
+constexpr uint32_t FORCE_SLEEP_HOLD_MS = 10000;
+bool pendingForceSleep = false;
 
 // The header's status icons (moon/lightning bolt) only reflect current
 // state when something else triggers a redraw — a button press, or a
@@ -88,13 +95,12 @@ void loop() {
   activityManager.loop();
 
   Activity* current = activityManager.getCurrentActivity();
-  bool onRootMenu = current && strcmp(current->getName(), "MainMenu") == 0;
+  bool sleepEligible = !ConfigWebServer::anyRunning();
 
-  // The moon hint only ever applies on the root menu (the only screen the
-  // idle-sleep timer runs on), so a stale flag elsewhere is harmless — it's
-  // never read outside that screen's own render().
+  // Mirrors the same condition UiChrome::drawHeader() computes internally,
+  // just to know when the icon needs a proactive redraw (see below).
   bool usbPlugged = Serial.isPlugged();
-  bool nearSleep = onRootMenu && IdleSleep::nearTimeout();
+  bool nearSleep = sleepEligible && IdleSleep::nearTimeout();
   if (current && (usbPlugged != lastUsbPlugged || nearSleep != lastNearSleep)) {
     lastUsbPlugged = usbPlugged;
     lastNearSleep = nearSleep;
@@ -102,7 +108,20 @@ void loop() {
                            [current] { current->render(); });
   }
 
-  if (onRootMenu && IdleSleep::timedOut()) {
+  // Hold the action button 10s to force sleep immediately. Waits for
+  // release before actually sleeping — sleeping while the wake-trigger pin
+  // is still held low would satisfy the wake condition instantly, causing
+  // a spurious immediate wake right back up.
+  if (sleepEligible && gpio.isHeldFor(HalGPIO::BTN_B, FORCE_SLEEP_HOLD_MS)) {
+    pendingForceSleep = true;
+  }
+  if (pendingForceSleep && !gpio.isPressed(HalGPIO::BTN_B)) {
+    pendingForceSleep = false;
+    enterLightSleep();
+    IdleSleep::noteActivity();
+  }
+
+  if (sleepEligible && IdleSleep::timedOut()) {
     enterLightSleep();
     IdleSleep::noteActivity();
   }

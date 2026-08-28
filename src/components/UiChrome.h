@@ -1,6 +1,8 @@
 #pragma once
 #include <HalDisplay.h>
 
+#include "../IdleSleep.h"
+#include "../network/ConfigWebServer.h"
 #include "Icons.h"
 #include "UITheme.h"
 
@@ -13,10 +15,12 @@ class UiChrome {
   // are here"). Right side is blank by default and only ever shows one of
   // two transient status icons: a lightning bolt when USB is plugged in
   // (native-USB SOF detection — only fires for an actual host like a
-  // computer, not a plain power brick with no data lines), else a moon
-  // when `nearSleep` (the main menu passes this only in the short window
-  // right before it actually naps — see IdleSleep.h).
-  static void drawHeader(const char* title = nullptr, bool nearSleep = false) {
+  // computer, not a plain power brick with no data lines), else a moon in
+  // the short window right before it actually naps (sleep applies on any
+  // screen except while the config web server is running — see main.cpp
+  // and ConfigWebServer::anyRunning() — so this is computed the same way
+  // here, not passed in per screen).
+  static void drawHeader(const char* title = nullptr) {
     auto& g = display.gfx();
     auto& t = display.text();
     t.setFont(UITheme::FONT_SMALL);
@@ -36,7 +40,7 @@ class UiChrome {
     int iconCx = g.width() - 9, iconCy = UITheme::HEADER_H / 2;
     if (Serial.isPlugged()) {
       Icons::zapSmall(g, iconCx, iconCy, GxEPD_BLACK);
-    } else if (nearSleep) {
+    } else if (!ConfigWebServer::anyRunning() && IdleSleep::nearTimeout()) {
       Icons::moonSmall(g, iconCx, iconCy, GxEPD_BLACK);
     }
   }

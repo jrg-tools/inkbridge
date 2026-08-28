@@ -18,6 +18,12 @@ class ConfigWebServer {
   void loop();
   bool isRunning() const { return server != nullptr; }
 
+  // True if any ConfigWebServer instance anywhere is currently serving —
+  // main.cpp checks this before sleeping, so it never naps out from under
+  // someone actively using the config web UI, regardless of which screen
+  // started the server.
+  static bool anyRunning() { return runningCount > 0; }
+
  private:
   bool serveFile(String path);
   void handleStatus();
@@ -28,4 +34,5 @@ class ConfigWebServer {
 
   std::unique_ptr<WebServer> server;
   bool apMode = false;
+  static inline int runningCount = 0;
 };

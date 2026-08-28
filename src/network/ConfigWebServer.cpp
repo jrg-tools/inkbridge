@@ -39,6 +39,7 @@ void ConfigWebServer::begin(bool ap) {
   server->onNotFound([this] { handleNotFound(); });
 
   server->begin();
+  runningCount++;
   Serial.println("[Web] config server on port 80");
 }
 
@@ -47,6 +48,7 @@ void ConfigWebServer::stop() {
   server->stop();
   server.reset();
   LittleFS.end();
+  runningCount--;
 }
 
 void ConfigWebServer::loop() {

@@ -15,7 +15,12 @@ class HalGPIO {
   static constexpr uint8_t BTN_B = 1;
   static constexpr uint8_t BTN_COUNT = 2;
 
-  static constexpr uint32_t DEBOUNCE_MS = 20;
+  // 40ms rather than a more typical ~20ms: a hard/fast press can make a
+  // switch mechanically rebound and re-make contact tens of ms later (a
+  // real secondary bounce, not sub-ms contact chatter) — too far apart for
+  // a tighter window to absorb, so it got latched as a second genuine
+  // press. Widening the window is the standard fix for that class of bounce.
+  static constexpr uint32_t DEBOUNCE_MS = 40;
   static constexpr uint32_t LONG_PRESS_MS = 600;
 
   void begin();
@@ -24,6 +29,9 @@ class HalGPIO {
   bool wasShortPressed(uint8_t btn) const;  // released before LONG_PRESS_MS
   bool wasLongPressed(uint8_t btn) const;   // held past LONG_PRESS_MS (once)
   bool anyEventThisFrame() const;           // any short/long press, either button
+
+  bool isPressed(uint8_t btn) const;                   // currently held (debounced)
+  bool isHeldFor(uint8_t btn, uint32_t ms) const;       // held continuously for at least ms
 
   // Arms both button GPIOs as light-sleep wake sources (neither pin is RTC-
   // capable, so deep sleep's ext0/ext1 wakeup can't be used here — light
