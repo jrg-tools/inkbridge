@@ -88,3 +88,49 @@ bool HomeAssistantClient::updateTodoItem(const String& entityId, const String& u
   Serial.printf("[HA] update_item %s (%s) -> %d\n", uid.c_str(), status.c_str(), code);
   return code == 200 || code == 201;
 }
+
+bool HomeAssistantClient::listTodoEntities(std::vector<TodoListInfo>& outLists) {
+  // `list.append(...)` mutation (rather than reassigning `result` inside the
+  // loop) is the standard idiom for building a list across Jinja's per-
+  // iteration scope in HA templates. `s.name` is the state's frontend
+  // display name (falls back to the entity id if no friendly_name is set).
+  static const char* TEMPLATE =
+      "{% set result = [] %}"
+      "{% for s in states.todo %}"
+      "{% set _ = result.append({'id': s.entity_id, 'name': s.name}) %}"
+      "{% endfor %}"
+      "{{ result | tojson }}";
+
+  JsonDocument reqDoc;
+  reqDoc["template"] = TEMPLATE;
+  String payload;
+  serializeJson(reqDoc, payload);
+
+  HTTPClient http;
+  http.setTimeout(5000);
+  http.begin(baseUrl + "/api/template");
+  http.addHeader("Authorization", authHeader);
+  http.addHeader("Content-Type", "application/json");
+
+  int code = http.POST(payload);
+  if (code != 200) {
+    Serial.printf("[HA] template -> %d\n", code);
+    http.end();
+    return false;
+  }
+  String body = http.getString();
+  http.end();
+
+  JsonDocument doc;
+  if (deserializeJson(doc, body) != DeserializationError::Ok) {
+    Serial.println("[HA] template: invalid JSON response");
+    return false;
+  }
+  for (JsonObjectConst entry : doc.as<JsonArrayConst>()) {
+    TodoListInfo info;
+    info.entityId = entry["id"] | "";
+    info.name = entry["name"] | "";
+    if (info.entityId.length()) outLists.push_back(info);
+  }
+  return true;
+}

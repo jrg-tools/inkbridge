@@ -23,6 +23,10 @@ class InkBridgeSettings {
   String haHost = "homeassistant.local";
   int haPort = 8123;
   String haToken;
+  // Gates the main menu's Shopping List button — off by default until the
+  // user opts in via the web UI (which also picks haShoppingListEntity from
+  // a fetched list of the HA instance's actual `todo` entities).
+  bool shoppingListEnabled = false;
   // Full entity_id of the HA `todo` list to sync (e.g. "todo.shopping_list").
   String haShoppingListEntity = "todo.shopping_list";
 

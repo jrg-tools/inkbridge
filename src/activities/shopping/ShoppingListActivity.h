@@ -16,6 +16,8 @@
 // other way), push what needs pushing, then persist. If WiFi/HA is
 // unreachable, or no entity is configured, the local cached list is still
 // shown/toggleable — this screen's job is the list, not the network call.
+// Checked items sink to the bottom (see sortItems()) so the top of the list
+// is always what's still left to buy.
 //
 //   A short: next row   A long: previous row
 //   B short: toggle checked (once synced)   B long: back (any time)
@@ -43,6 +45,10 @@ class ShoppingListActivity : public UiListActivity {
 
   void reconcile(const std::vector<HomeAssistantClient::TodoItem>& remote);
   void finishSync();
+  // Stable-sorts `items` so checked ("already bought") items sink to the
+  // bottom, unchecked ones stay on top, and relative order within each
+  // group is otherwise preserved.
+  void sortItems();
   String truncateToWidth(const String& text, int maxWidth) const;
 
   HomeAssistantClient haClient;

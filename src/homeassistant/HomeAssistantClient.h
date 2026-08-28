@@ -15,6 +15,12 @@ class HomeAssistantClient {
     bool checked = false;
   };
 
+  // One `todo.*` list entity, as returned by listTodoEntities().
+  struct TodoListInfo {
+    String entityId;
+    String name;
+  };
+
   void begin(const String& host, int port, const String& token);
 
   // `scriptObjectId` is the part after "script.". Returns true on HTTP
@@ -30,6 +36,14 @@ class HomeAssistantClient {
   // Calls todo.update_item to set one item's checked state by uid. Returns
   // true on HTTP 200/201.
   bool updateTodoItem(const String& entityId, const String& uid, bool checked);
+
+  // Lists every `todo.*` entity (id + friendly name) via a small Jinja
+  // template run through /api/template, rather than pulling the full
+  // /api/states dump (every entity's full state+attributes) just to filter
+  // one domain client-side — that response can be large enough to strain
+  // this device's heap. Returns false — leaving `outLists` untouched — on
+  // any HTTP or parse failure.
+  bool listTodoEntities(std::vector<TodoListInfo>& outLists);
 
  private:
   String baseUrl;

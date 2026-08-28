@@ -6,6 +6,7 @@
 
 #include "../InkBridgeSettings.h"
 #include "../Version.h"
+#include "../homeassistant/HomeAssistantClient.h"
 #include "../i18n/I18n.h"
 
 namespace {
@@ -34,6 +35,7 @@ void ConfigWebServer::begin(bool ap) {
   server->on("/api/status", HTTP_GET, [this] { handleStatus(); });
   server->on("/api/settings", HTTP_GET, [this] { handleGetSettings(); });
   server->on("/api/settings", HTTP_POST, [this] { handlePostSettings(); });
+  server->on("/api/ha/todo-lists", HTTP_GET, [this] { handleHaTodoLists(); });
   server->on("/api/restart", HTTP_POST, [this] { handleRestart(); });
   // Everything else falls through to the SvelteKit build on LittleFS.
   server->onNotFound([this] { handleNotFound(); });
@@ -96,6 +98,7 @@ void ConfigWebServer::handleGetSettings() {
   }
   transfer["haHost"] = SETTINGS.haHost;
   transfer["haPort"] = SETTINGS.haPort;
+  transfer["shoppingListEnabled"] = SETTINGS.shoppingListEnabled;
   transfer["haShoppingListEntity"] = SETTINGS.haShoppingListEntity;
   // Sent as a nested array (not a string) so the web UI can bind it directly.
   JsonDocument scriptsDoc;
@@ -171,6 +174,10 @@ void ConfigWebServer::handlePostSettings() {
     SETTINGS.haPort = transfer["haPort"].as<int>();
     applied++;
   }
+  if (transfer["shoppingListEnabled"].is<bool>()) {
+    SETTINGS.shoppingListEnabled = transfer["shoppingListEnabled"].as<bool>();
+    applied++;
+  }
   // Posted as a nested array; re-serialize to the flat string form we store.
   if (transfer["haScripts"].is<JsonArrayConst>()) {
     String out;
@@ -190,6 +197,31 @@ void ConfigWebServer::handlePostSettings() {
   I18n::getInstance().setLanguage(SETTINGS.language == "es" ? Lang::ES : Lang::EN);
 
   server->send(200, "text/plain", String("Applied ") + applied + " setting(s)");
+}
+
+void ConfigWebServer::handleHaTodoLists() {
+  // Uses whatever host/token are already persisted on the device — not any
+  // unsaved edits sitting in the web UI's form — since the whole point is
+  // that the browser shouldn't need its own copy of the token to do this.
+  HomeAssistantClient haClient;
+  haClient.begin(SETTINGS.haHost, SETTINGS.haPort, SETTINGS.haToken);
+
+  std::vector<HomeAssistantClient::TodoListInfo> lists;
+  if (!haClient.listTodoEntities(lists)) {
+    server->send(502, "text/plain", "Could not reach Home Assistant");
+    return;
+  }
+
+  JsonDocument doc;
+  JsonArray arr = doc.to<JsonArray>();
+  for (const auto& list : lists) {
+    JsonObject o = arr.add<JsonObject>();
+    o["id"] = list.entityId;
+    o["name"] = list.name;
+  }
+  String response;
+  serializeJson(arr, response);
+  server->send(200, "application/json", response);
 }
 
 void ConfigWebServer::handleRestart() {

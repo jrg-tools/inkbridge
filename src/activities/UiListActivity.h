@@ -38,10 +38,12 @@ class UiListActivity : public Activity {
   int visibleRows() const;
   int rowY(int index) const;
   bool rowVisible(int index) const;
+  // Keeps scrollOffset showing `selected` — exposed (not just used
+  // internally by A-nav) so a subclass that reorders rows out from under
+  // the current selection (e.g. ShoppingListActivity re-sorting after a
+  // toggle) can re-clamp after moving `selected` to follow.
+  void clampScroll();
 
   int selected = 0;
   int scrollOffset = 0;
-
- private:
-  void clampScroll();
 };

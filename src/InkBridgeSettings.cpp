@@ -33,6 +33,7 @@ void InkBridgeSettings::load() {
   haPort = prefs.getInt("haPort", haPort);
   haToken = prefs.getString("haToken", "");
   haScripts = prefs.getString("haScripts", haScripts);
+  shoppingListEnabled = prefs.getBool("shopEnabled", shoppingListEnabled);
   haShoppingListEntity = prefs.getString("haShopEntity", haShoppingListEntity);
   language = prefs.getString("language", language);
   fontFamily = prefs.getString("fontFamily", fontFamily);
@@ -51,6 +52,7 @@ void InkBridgeSettings::save() const {
   prefs.putInt("haPort", haPort);
   prefs.putString("haToken", haToken);
   prefs.putString("haScripts", haScripts);
+  prefs.putBool("shopEnabled", shoppingListEnabled);
   prefs.putString("haShopEntity", haShoppingListEntity);
   prefs.putString("language", language);
   prefs.putString("fontFamily", fontFamily);

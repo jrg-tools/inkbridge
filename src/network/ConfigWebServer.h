@@ -4,10 +4,14 @@
 #include <memory>
 
 // API-first config server (CrossPoint-style):
-//   GET  /api/status    {"version","ip","mode","rssi","freeHeap","uptime"}
-//   GET  /api/settings  current settings JSON (secrets omitted)
-//   POST /api/settings  JSON body, applies + persists via SETTINGS
-//   POST /api/restart   reboots the device
+//   GET  /api/status       {"version","ip","mode","rssi","freeHeap","uptime"}
+//   GET  /api/settings     current settings JSON (secrets omitted)
+//   POST /api/settings     JSON body, applies + persists via SETTINGS
+//   GET  /api/ha/todo-lists  [{"id","name"}] of HA's `todo.*` entities —
+//                            proxied through the device (using its already-
+//                            stored host/token) so the browser never needs
+//                            its own copy of the token
+//   POST /api/restart      reboots the device
 // All other paths are served from the SvelteKit build on LittleFS (web/,
 // deployed with `pnpm deploy` + `pio run -t uploadfs`).
 // CORS is enabled so external clients can use the API directly.
@@ -28,6 +32,7 @@ class ConfigWebServer {
   void handleStatus();
   void handleGetSettings();
   void handlePostSettings();
+  void handleHaTodoLists();
   void handleRestart();
   void handleNotFound();
 

@@ -35,8 +35,14 @@
 		wifiNetworks: WifiNetworkSetting[];
 		haHost: string;
 		haPort: number;
+		shoppingListEnabled: boolean;
 		haShoppingListEntity: string;
 		haScripts: ScriptButtonSetting[];
+	}
+
+	interface TodoList {
+		id: string;
+		name: string;
 	}
 
 	interface DeviceSettings {
@@ -84,6 +90,7 @@
 		wifiNetworks: [],
 		haHost: '',
 		haPort: 8123,
+		shoppingListEnabled: false,
 		haShoppingListEntity: '',
 		haScripts: []
 	});
@@ -101,6 +108,9 @@
 	let section = $state<Section>('wifi');
 	let testingHa = $state(false);
 	let haTestResult = $state<{ ok: boolean; message: string } | null>(null);
+	let todoLists = $state<TodoList[]>([]);
+	let fetchingLists = $state(false);
+	let fetchListsError = $state('');
 
 	const statusLabel = $derived.by(() => {
 		switch (connection) {
@@ -161,14 +171,28 @@
 		}
 	}
 
-	// Hits Home Assistant's REST API directly from the browser — no round
-	// trip through the device — using whatever is currently in the form
-	// (host/port/token), whether or not it's been saved yet.
+	// Used by testHaConnection, which hits Home Assistant's REST API directly
+	// from the browser (no round trip through the device) so it can test
+	// whatever's currently in the form (host/port/token), whether or not
+	// it's been saved yet — the device itself can only test what's already
+	// persisted.
+	function haBaseUrl(): string {
+		let scheme = 'http://';
+		let bareHost = transfer.haHost.trim();
+		if (bareHost.startsWith('https://')) {
+			scheme = 'https://';
+			bareHost = bareHost.slice(8);
+		} else if (bareHost.startsWith('http://')) {
+			bareHost = bareHost.slice(7);
+		}
+		const port = transfer.haPort > 0 ? `:${transfer.haPort}` : '';
+		return `${scheme}${bareHost}${port}`;
+	}
+
 	async function testHaConnection() {
 		haTestResult = null;
 
-		const host = transfer.haHost.trim();
-		if (!host) {
+		if (!transfer.haHost.trim()) {
 			haTestResult = { ok: false, message: 'Enter a host first.' };
 			return;
 		}
@@ -177,20 +201,11 @@
 			return;
 		}
 
-		let scheme = 'http://';
-		let bareHost = host;
-		if (bareHost.startsWith('https://')) {
-			scheme = 'https://';
-			bareHost = bareHost.slice(8);
-		} else if (bareHost.startsWith('http://')) {
-			bareHost = bareHost.slice(7);
-		}
-		const port = transfer.haPort > 0 ? `:${transfer.haPort}` : '';
-		const url = `${scheme}${bareHost}${port}/api/`;
-
 		testingHa = true;
 		try {
-			const res = await fetch(url, { headers: { Authorization: `Bearer ${haToken}` } });
+			const res = await fetch(`${haBaseUrl()}/api/`, {
+				headers: { Authorization: `Bearer ${haToken}` }
+			});
 			if (res.ok) {
 				haTestResult = { ok: true, message: 'Connected.' };
 			} else if (res.status === 401) {
@@ -206,6 +221,29 @@
 			};
 		} finally {
 			testingHa = false;
+		}
+	}
+
+	// Populates the Shopping list entity dropdown from HA's actual `todo.*`
+	// entities. Goes through the device's own /api/ha/todo-lists, which
+	// proxies the HA call using its already-stored host/token, rather than
+	// fetching HA directly from the browser — so this only ever reflects
+	// whatever's currently saved on the device, not unsaved form edits.
+	async function fetchTodoLists() {
+		fetchListsError = '';
+		fetchingLists = true;
+		try {
+			const res = await fetch('/api/ha/todo-lists');
+			if (!res.ok) {
+				fetchListsError = (await res.text()) || `Unexpected response: HTTP ${res.status}`;
+				return;
+			}
+			todoLists = await res.json();
+			if (!todoLists.length) fetchListsError = 'No todo lists found in Home Assistant.';
+		} catch {
+			fetchListsError = 'Could not reach the device.';
+		} finally {
+			fetchingLists = false;
 		}
 	}
 
@@ -291,7 +329,7 @@
 
 		const transferBody: Record<
 			string,
-			string | number | ScriptButtonSetting[] | WifiNetworkSetting[]
+			string | number | boolean | ScriptButtonSetting[] | WifiNetworkSetting[]
 		> = { ...transfer };
 		if (haToken) transferBody.haToken = haToken;
 		const body = { transfer: transferBody, settings: { ...deviceSettings } };
@@ -432,18 +470,6 @@
 					is a reverse-proxied https:// address with no separate port.
 				</p>
 				<div class="field">
-					<label for="ha-shopping-entity">Shopping list entity</label>
-					<input
-						id="ha-shopping-entity"
-						type="text"
-						bind:value={transfer.haShoppingListEntity}
-						placeholder="todo.shopping_list"
-					/>
-				</div>
-				<p class="hint-small">
-					The <code>todo</code> entity the device's Shopping list screen syncs with.
-				</p>
-				<div class="field">
 					<label for="ha-token">Access token</label>
 					<SecretInput id="ha-token" bind:value={haToken} placeholder="(unchanged)" />
 				</div>
@@ -468,6 +494,46 @@
 						connection may still differ.
 					</p>
 				</div>
+
+				<h3 class="subsection-title">Shopping list</h3>
+				<div class="field field--checkbox">
+					<label class="checkbox-label">
+						<input type="checkbox" bind:checked={transfer.shoppingListEnabled} />
+						Enable shopping list sync
+					</label>
+				</div>
+				<p class="hint-small">Shows a Shopping List button in the device's main menu.</p>
+				<div class="field">
+					<label for="ha-shopping-entity">List</label>
+					<select id="ha-shopping-entity" bind:value={transfer.haShoppingListEntity}>
+						{#if transfer.haShoppingListEntity && !todoLists.some((l) => l.id === transfer.haShoppingListEntity)}
+							<option value={transfer.haShoppingListEntity}>
+								{transfer.haShoppingListEntity}
+							</option>
+						{/if}
+						{#each todoLists as list (list.id)}
+							<option value={list.id}>{list.name}</option>
+						{/each}
+					</select>
+				</div>
+				<div class="field">
+					<button
+						type="button"
+						class="btn btn--secondary"
+						disabled={fetchingLists}
+						onclick={fetchTodoLists}
+					>
+						{fetchingLists ? 'Fetching…' : 'Fetch lists from Home Assistant'}
+					</button>
+					{#if fetchListsError}
+						<p class="hint-small test-result error">{fetchListsError}</p>
+					{/if}
+					<p class="hint-small">
+						Fetched through the device using its already-saved host and token — save those
+						first if you haven't yet, since unsaved changes here aren't used.
+					</p>
+				</div>
+
 				<h3 class="subsection-title">Scripts</h3>
 				<p class="hint-small">
 					Each entry becomes a button in the device's main menu, in this order. Script ID is
@@ -692,6 +758,24 @@
 
 	.field {
 		margin: 12px 0;
+	}
+
+	.checkbox-label {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 15px;
+		font-weight: 400;
+		letter-spacing: normal;
+		text-transform: none;
+		color: var(--ink);
+		cursor: pointer;
+	}
+
+	.checkbox-label input[type='checkbox'] {
+		width: 18px;
+		height: 18px;
+		accent-color: var(--ink);
 	}
 
 	.subsection-title {

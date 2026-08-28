@@ -3,6 +3,8 @@
 #include <HalGPIO.h>
 #include <WiFi.h>
 
+#include <algorithm>
+
 #include "../../components/Icons.h"
 #include "../../components/UiChrome.h"
 #include "../../components/UITheme.h"
@@ -12,6 +14,7 @@
 void ShoppingListActivity::onEnter() {
   Activity::onEnter();
   items = SETTINGS.shoppingList();
+  sortItems();
   pushQueue.clear();
   pushIndex = 0;
   syncOk = false;
@@ -54,6 +57,7 @@ void ShoppingListActivity::loop() {
       std::vector<HomeAssistantClient::TodoItem> remote;
       if (haClient.getTodoItems(SETTINGS.haShoppingListEntity, remote)) {
         reconcile(remote);
+        sortItems();
         if (pushQueue.empty()) {
           finishSync();
           syncOk = true;
@@ -161,10 +165,28 @@ void ShoppingListActivity::finishSync() {
   SETTINGS.saveShoppingList();
 }
 
+void ShoppingListActivity::sortItems() {
+  std::stable_sort(items.begin(), items.end(),
+                    [](const InkBridgeSettings::ShoppingItem& a,
+                       const InkBridgeSettings::ShoppingItem& b) { return a.checked < b.checked; });
+}
+
 void ShoppingListActivity::onSelectRow(int index) {
   if (index < 0 || index >= (int)items.size()) return;
+  String uid = items[index].uid;
   items[index].checked = !items[index].checked;
   items[index].dirty = true;
+  sortItems();
+  // Follow the toggled item to its new row, since it just moved (checked
+  // items sink to the bottom) — otherwise `selected` would silently land on
+  // whatever item happens to now occupy the old row index.
+  for (int i = 0; i < (int)items.size(); i++) {
+    if (items[i].uid == uid) {
+      selected = i;
+      break;
+    }
+  }
+  clampScroll();
   SETTINGS.setShoppingList(items);
   SETTINGS.saveShoppingList();  // NVS only — no network call, pushed on next sync
   requestUpdate();

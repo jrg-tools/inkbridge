@@ -31,10 +31,10 @@ void MainMenuActivity::render() {
   const char* label;
   if (selected < scriptCount) {
     label = scripts[selected].label.c_str();
-  } else if (selected == scriptCount) {
-    label = TR(TRANSFER);
-  } else {
+  } else if (SETTINGS.shoppingListEnabled && selected == scriptCount) {
     label = TR(SHOPPING_LIST);
+  } else {
+    label = TR(TRANSFER);
   }
   UiChrome::drawFooter(label);
 }
@@ -53,10 +53,10 @@ void MainMenuActivity::drawRow(int index, int y, bool rowSelected) {
   int scriptCount = (int)scripts.size();
   if (index < scriptCount) {
     Icons::byKey(g, cx, cy, fg, scripts[index].icon);
-  } else if (index == scriptCount) {
-    Icons::wifi(g, cx, cy, fg);
-  } else {
+  } else if (SETTINGS.shoppingListEnabled && index == scriptCount) {
     Icons::shoppingCart(g, cx, cy, fg);
+  } else {
+    Icons::wifi(g, cx, cy, fg);
   }
 }
 
@@ -64,9 +64,9 @@ void MainMenuActivity::onSelectRow(int index) {
   int scriptCount = (int)scripts.size();
   if (index < scriptCount) {
     activityManager.pushActivity(std::make_unique<ScriptRunActivity>(scripts[index]));
-  } else if (index == scriptCount) {
-    activityManager.pushActivity(std::make_unique<TransferActivity>());
-  } else {
+  } else if (SETTINGS.shoppingListEnabled && index == scriptCount) {
     activityManager.pushActivity(std::make_unique<ShoppingListActivity>());
+  } else {
+    activityManager.pushActivity(std::make_unique<TransferActivity>());
   }
 }

@@ -5,9 +5,10 @@
 #include "../UiListActivity.h"
 
 // Root menu: a 2-column grid of square, icon-only buttons — each configured
-// HA script (web config's Scripts list), followed by Transfer (WiFi/HA
-// connectivity). Device settings (language, hotspot) live in the web
-// config UI only.
+// HA script (web config's Scripts list), followed by Shopping List (only
+// when SETTINGS.shoppingListEnabled — off by default, toggled in the web
+// UI's HA section) and Transfer (WiFi/HA connectivity). Device settings
+// (language, hotspot) live in the web config UI only.
 class MainMenuActivity : public UiListActivity {
  public:
   MainMenuActivity() : UiListActivity("MainMenu") {}
@@ -16,7 +17,9 @@ class MainMenuActivity : public UiListActivity {
   void render() override;
 
  protected:
-  int rowCount() const override { return (int)scripts.size() + 2; }
+  int rowCount() const override {
+    return (int)scripts.size() + 1 + (SETTINGS.shoppingListEnabled ? 1 : 0);
+  }
   void drawRow(int index, int y, bool selected) override;
   void onSelectRow(int index) override;
   // Root screen — nothing to go back to.
