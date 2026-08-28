@@ -8,7 +8,7 @@
 // Reusable scrolling-list screen (CrossPoint UiListActivity equivalent).
 // Subclasses provide row data/drawing; this class owns selection, wrapping,
 // scrolling, the scrollbar, and the A-button navigation:
-//   A short: next row (wraps)   A long: jump to top
+//   A short: next row (wraps)   A long: previous row (wraps)
 //   B short: onSelectRow()      B long: onBack()
 class UiListActivity : public Activity {
  public:
@@ -24,7 +24,7 @@ class UiListActivity : public Activity {
   virtual void drawRow(int index, int y, bool selected) = 0;
   virtual void onSelectRow(int index) {}
   virtual void onBack() {}
-  // Battery header by default; override for custom chrome.
+  // Empty header by default; override for custom chrome.
   virtual void drawHeader() { UiChrome::drawHeader(); }
   // Shown centered when rowCount() == 0.
   virtual const char* emptyText() const { return TR(NOTHING_HERE); }

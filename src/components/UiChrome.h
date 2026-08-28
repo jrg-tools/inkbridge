@@ -1,39 +1,45 @@
 #pragma once
-#include <HalBattery.h>
 #include <HalDisplay.h>
 
 #include "Icons.h"
 #include "UITheme.h"
 
-// Shared screen chrome: battery header and rounded row-buttons.
+// Shared screen chrome: header and rounded row-buttons.
 class UiChrome {
  public:
-  // Battery icon + percentage in the top-right corner. No title, no lines.
-  static void drawHeader() {
+  // Screen title in the top-left, bold, with a short rule underneath (just
+  // the title's width) so a submenu makes clear which screen it is.
+  // Omit/empty for a blank header (e.g. the root menu, which needs no
+  // "you are here").
+  static void drawHeader(const char* title = nullptr) {
+    if (!title || !title[0]) return;
     auto& g = display.gfx();
     auto& t = display.text();
-
-    int pct = battery.percent();
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%d%%", pct);
-
     t.setFont(UITheme::FONT_SMALL);
     t.setForegroundColor(GxEPD_BLACK);
-    int textW = t.getUTF8Width(buf);
-    int x = g.width() - 4 - textW;
+    int x = 4;
+    int textW = t.getUTF8Width(title);
+    // Faux-bold: the custom font set has no bold cut, so redraw 1px over.
     t.setCursor(x, 13);
-    t.print(buf);
-    Icons::batteryIcon(g, x - 22, 4, pct, GxEPD_BLACK);
+    t.print(title);
+    t.setCursor(x + 1, 13);
+    t.print(title);
+    g.drawFastHLine(x, UITheme::HEADER_H, textW + 1, GxEPD_BLACK);
   }
 
   // Row-button: rounded border, inverted (black fill, white text) when
   // selected. Panel is 1-bit — no grey, so selection is a solid black pill.
-  static void drawRowButton(int x, int y, int w, int h, bool selected) {
+  // `thickness` only affects the unselected outline (selected is already a
+  // solid fill); drawn as concentric inset rects since GxEPD2 has no
+  // stroke-width option of its own.
+  static void drawRowButton(int x, int y, int w, int h, bool selected, int thickness = 1) {
     auto& g = display.gfx();
     if (selected) {
       g.fillRoundRect(x, y, w, h, UITheme::BTN_RADIUS, GxEPD_BLACK);
     } else {
-      g.drawRoundRect(x, y, w, h, UITheme::BTN_RADIUS, GxEPD_BLACK);
+      for (int i = 0; i < thickness; i++) {
+        g.drawRoundRect(x + i, y + i, w - 2 * i, h - 2 * i, UITheme::BTN_RADIUS, GxEPD_BLACK);
+      }
     }
   }
 
@@ -47,6 +53,34 @@ class UiChrome {
     int baseline = y + (h + t.getFontAscent()) / 2;
     t.setCursor(x + (w - textW) / 2, baseline);
     t.print(label);
+  }
+
+  // Button-hint footer for list screens: bold "A" bottom-left (the action
+  // button — select/run/back), up/down chevrons bottom-right (the move
+  // button — next/previous row). `label`, when given, is centered between
+  // them (the main menu uses this for the currently selected item's name;
+  // other screens leave it blank).
+  static void drawFooter(const char* label = nullptr) {
+    auto& g = display.gfx();
+    auto& t = display.text();
+    int midY = UITheme::FOOTER_Y + UITheme::FOOTER_H / 2;
+
+    t.setFont(UITheme::FONT_SMALL);
+    t.setForegroundColor(GxEPD_BLACK);
+    int baseline = midY + t.getFontAscent() / 2;
+    // Faux-bold: the custom font set has no bold cut, so redraw 1px over.
+    t.setCursor(6, baseline);
+    t.print("A");
+    t.setCursor(7, baseline);
+    t.print("A");
+
+    Icons::upDown(g, g.width() - 10, midY, 4, GxEPD_BLACK);
+
+    if (label && label[0]) {
+      int textW = t.getUTF8Width(label);
+      t.setCursor((g.width() - textW) / 2, baseline);
+      t.print(label);
+    }
   }
 
   // Right-edge scrollbar for lists longer than the viewport.

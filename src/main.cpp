@@ -5,7 +5,6 @@
 // Boot goes straight to the menu; no radio is started until the user asks.
 
 #include <Arduino.h>
-#include <HalBattery.h>
 #include <HalDisplay.h>
 #include <HalGPIO.h>
 
@@ -41,9 +40,9 @@ void setup() {
   Serial.begin(115200);
 
   gpio.begin();
-  battery.begin();
   display.begin();
   SETTINGS.load();
+  UITheme::applyFontFamily(SETTINGS.fontFamily);
 
   display.refresh(drawSplash, HalDisplay::FULL_REFRESH);
 

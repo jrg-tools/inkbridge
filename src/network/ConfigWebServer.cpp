@@ -82,16 +82,26 @@ void ConfigWebServer::handleStatus() {
 }
 
 void ConfigWebServer::handleGetSettings() {
-  // Secrets (wifiPassword, haToken) are never returned.
+  // Secrets (wifi/haToken passwords) are never returned.
   // Grouped to mirror the device menus: transfer (connectivity) / settings.
   JsonDocument doc;
   JsonObject transfer = doc["transfer"].to<JsonObject>();
-  transfer["wifiSsid"] = SETTINGS.wifiSsid;
+  // SSID only — passwords never leave the device. The web UI merges these
+  // back in by SSID on save, so leaving a password field blank keeps it.
+  JsonArray wifiArr = transfer["wifiNetworks"].to<JsonArray>();
+  for (const auto& net : SETTINGS.wifis()) {
+    wifiArr.add<JsonObject>()["ssid"] = net.ssid;
+  }
   transfer["haHost"] = SETTINGS.haHost;
   transfer["haPort"] = SETTINGS.haPort;
   transfer["haEntities"] = SETTINGS.haEntities;
+  // Sent as a nested array (not a string) so the web UI can bind it directly.
+  JsonDocument scriptsDoc;
+  deserializeJson(scriptsDoc, SETTINGS.haScripts);
+  transfer["haScripts"] = scriptsDoc;
   JsonObject settings = doc["settings"].to<JsonObject>();
   settings["language"] = SETTINGS.language;
+  settings["fontFamily"] = SETTINGS.fontFamily;
   // Hotspot credentials are shown on the device screen, so not secret.
   settings["apSsid"] = SETTINGS.apSsid;
   settings["apPassword"] = SETTINGS.apPassword;
@@ -123,8 +133,35 @@ void ConfigWebServer::handlePostSettings() {
   JsonVariantConst settings =
       root["settings"].is<JsonObjectConst>() ? root["settings"] : root;
 
-  applyString(transfer, "wifiSsid", SETTINGS.wifiSsid);
-  applyString(transfer, "wifiPassword", SETTINGS.wifiPassword);
+  // Posted as a nested array of {ssid, password}. A blank password keeps
+  // the previously stored one for that SSID (matched by SSID, since the
+  // list is freely reorderable) — same "blank = unchanged" convention as
+  // every other secret field here.
+  if (transfer["wifiNetworks"].is<JsonArrayConst>()) {
+    auto existing = SETTINGS.wifis();
+    JsonDocument outDoc;
+    JsonArray outArr = outDoc.to<JsonArray>();
+    for (JsonObjectConst entry : transfer["wifiNetworks"].as<JsonArrayConst>()) {
+      String ssid = entry["ssid"] | "";
+      if (!ssid.length()) continue;
+      String password = entry["password"] | "";
+      if (!password.length()) {
+        for (const auto& net : existing) {
+          if (net.ssid == ssid) {
+            password = net.password;
+            break;
+          }
+        }
+      }
+      JsonObject o = outArr.add<JsonObject>();
+      o["ssid"] = ssid;
+      o["password"] = password;
+    }
+    String out;
+    serializeJson(outArr, out);
+    SETTINGS.wifiNetworks = out;
+    applied++;
+  }
   applyString(transfer, "haHost", SETTINGS.haHost);
   applyString(transfer, "haToken", SETTINGS.haToken);
   applyString(transfer, "haEntities", SETTINGS.haEntities);
@@ -132,7 +169,15 @@ void ConfigWebServer::handlePostSettings() {
     SETTINGS.haPort = transfer["haPort"].as<int>();
     applied++;
   }
+  // Posted as a nested array; re-serialize to the flat string form we store.
+  if (transfer["haScripts"].is<JsonArrayConst>()) {
+    String out;
+    serializeJson(transfer["haScripts"], out);
+    SETTINGS.haScripts = out;
+    applied++;
+  }
   applyString(settings, "language", SETTINGS.language);
+  applyString(settings, "fontFamily", SETTINGS.fontFamily);
   applyString(settings, "apSsid", SETTINGS.apSsid);
   // Empty apPassword is allowed: it regenerates on next hotspot start.
   if (settings["apPassword"].is<const char*>()) {

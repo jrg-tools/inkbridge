@@ -3,9 +3,9 @@
 #include <ESPmDNS.h>
 #include <HalGPIO.h>
 #include <WiFi.h>
-#include <qrcode.h>
 
 #include "../../InkBridgeSettings.h"
+#include "../../components/QrCode.h"
 #include "../../components/UiChrome.h"
 #include "../../i18n/I18n.h"
 #include "../ActivityManager.h"
@@ -26,27 +26,7 @@ String randomPassword() {
 // Standard format: WIFI:T:WPA;S:<ssid>;P:<password>;;
 int drawWifiQr(Adafruit_GFX& g, const char* ssid, const String& password, int top) {
   String payload = String("WIFI:T:WPA;S:") + ssid + ";P:" + password + ";;";
-
-  // Version 4 (3px modules) fits short credentials; longer ones fall back to
-  // version 8 with 2px modules (98px, still scannable).
-  QRCode qr;
-  uint8_t qrData[qrcode_getBufferSize(8)];
-  int scale = 3;
-  if (qrcode_initText(&qr, qrData, 4, ECC_MEDIUM, payload.c_str()) != 0) {
-    qrcode_initText(&qr, qrData, 8, ECC_MEDIUM, payload.c_str());
-    scale = 2;
-  }
-
-  int size = qr.size * scale;
-  int x0 = (g.width() - size) / 2;
-  for (int y = 0; y < qr.size; y++) {
-    for (int x = 0; x < qr.size; x++) {
-      if (qrcode_getModule(&qr, x, y)) {
-        g.fillRect(x0 + x * scale, top + y * scale, scale, scale, GxEPD_BLACK);
-      }
-    }
-  }
-  return size;
+  return drawQrCode(g, payload.c_str(), top, GxEPD_BLACK);
 }
 }  // namespace
 
@@ -88,7 +68,7 @@ void SetupApActivity::render() {
   auto& g = display.gfx();
   auto& t = display.text();
   g.fillScreen(GxEPD_WHITE);
-  UiChrome::drawHeader();
+  UiChrome::drawHeader(TR(SETUP_HOTSPOT));
 
   // Centered-line helper: keeps every row inside the 122px width.
   auto centered = [&](const char* text, int baseline) {

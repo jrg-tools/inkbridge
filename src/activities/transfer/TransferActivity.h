@@ -12,4 +12,5 @@ class TransferActivity : public UiListActivity {
   void drawRow(int index, int y, bool selected) override;
   void onSelectRow(int index) override;
   void onBack() override;
+  void drawHeader() override { UiChrome::drawHeader(TR(TRANSFER)); }
 };

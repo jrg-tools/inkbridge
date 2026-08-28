@@ -21,6 +21,12 @@ class HomeAssistantClient {
   // Toggles a light/switch. Returns true on HTTP 200/201.
   bool toggle(const Entity& entity);
 
+  // Runs a script via script.turn_on + entity_id target — the service every
+  // script entity always exposes, regardless of how its own per-script
+  // service got registered. `scriptObjectId` is the part after "script.".
+  // Returns true on HTTP 200/201.
+  bool runScript(const String& scriptObjectId);
+
   bool isConnected() const { return connected; }
 
  private:

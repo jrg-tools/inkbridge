@@ -11,7 +11,7 @@ void UiListActivity::loop() {
     requestUpdate();
   }
   if (gpio.wasLongPressed(HalGPIO::BTN_A) && count > 0) {
-    selected = 0;
+    selected = (selected - 1 + count) % count;
     clampScroll();
     requestUpdate();
   }
@@ -59,4 +59,5 @@ void UiListActivity::render() {
     drawRow(i, rowY(i), i == selected);
   }
   UiChrome::drawScrollbar(count, scrollOffset, visibleRows(), rowHeight());
+  UiChrome::drawFooter();
 }
