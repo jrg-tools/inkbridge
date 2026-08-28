@@ -16,7 +16,7 @@ class MainMenuActivity : public UiListActivity {
   void render() override;
 
  protected:
-  int rowCount() const override { return (int)scripts.size() + 1; }
+  int rowCount() const override { return (int)scripts.size() + 2; }
   void drawRow(int index, int y, bool selected) override;
   void onSelectRow(int index) override;
   // Root screen — nothing to go back to.

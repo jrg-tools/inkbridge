@@ -59,5 +59,5 @@ void UiListActivity::render() {
     drawRow(i, rowY(i), i == selected);
   }
   UiChrome::drawScrollbar(count, scrollOffset, visibleRows(), rowHeight());
-  UiChrome::drawFooter();
+  UiChrome::drawFooter(footerLabel());
 }

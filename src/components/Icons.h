@@ -32,6 +32,10 @@ class Icons {
     draw(g, cx, cy, IconBitmaps::wifi, color);
   }
 
+  static void shoppingCart(Adafruit_GFX& g, int cx, int cy, uint16_t color) {
+    draw(g, cx, cy, IconBitmaps::shopping_cart, color);
+  }
+
   // Header status icons (small variants): moon for "idle-sleep applies on
   // this screen", zap for "USB connected".
   static void moonSmall(Adafruit_GFX& g, int cx, int cy, uint16_t color) {

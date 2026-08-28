@@ -35,6 +35,7 @@
 		wifiNetworks: WifiNetworkSetting[];
 		haHost: string;
 		haPort: number;
+		haShoppingListEntity: string;
 		haScripts: ScriptButtonSetting[];
 	}
 
@@ -83,6 +84,7 @@
 		wifiNetworks: [],
 		haHost: '',
 		haPort: 8123,
+		haShoppingListEntity: '',
 		haScripts: []
 	});
 	let deviceSettings = $state<DeviceSettings>({
@@ -428,6 +430,18 @@
 				<p class="hint-small">
 					Port 0 uses the scheme's default (443 for https, 80 for http) — set this to 0 if Host
 					is a reverse-proxied https:// address with no separate port.
+				</p>
+				<div class="field">
+					<label for="ha-shopping-entity">Shopping list entity</label>
+					<input
+						id="ha-shopping-entity"
+						type="text"
+						bind:value={transfer.haShoppingListEntity}
+						placeholder="todo.shopping_list"
+					/>
+				</div>
+				<p class="hint-small">
+					The <code>todo</code> entity the device's Shopping list screen syncs with.
 				</p>
 				<div class="field">
 					<label for="ha-token">Access token</label>

@@ -30,6 +30,10 @@ class UiListActivity : public Activity {
   virtual const char* emptyText() const { return TR(NOTHING_HERE); }
   // Row height in pixels; override for taller (e.g. two-line) rows.
   virtual int rowHeight() const { return UITheme::ROW_H; }
+  // Centered footer label, passed through to UiChrome::drawFooter(). Default
+  // blank; override for a status hint (e.g. ShoppingListActivity's "not
+  // synced").
+  virtual const char* footerLabel() const { return nullptr; }
 
   int visibleRows() const;
   int rowY(int index) const;

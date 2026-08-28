@@ -96,6 +96,7 @@ void ConfigWebServer::handleGetSettings() {
   }
   transfer["haHost"] = SETTINGS.haHost;
   transfer["haPort"] = SETTINGS.haPort;
+  transfer["haShoppingListEntity"] = SETTINGS.haShoppingListEntity;
   // Sent as a nested array (not a string) so the web UI can bind it directly.
   JsonDocument scriptsDoc;
   deserializeJson(scriptsDoc, SETTINGS.haScripts);
@@ -165,6 +166,7 @@ void ConfigWebServer::handlePostSettings() {
   }
   applyString(transfer, "haHost", SETTINGS.haHost);
   applyString(transfer, "haToken", SETTINGS.haToken);
+  applyString(transfer, "haShoppingListEntity", SETTINGS.haShoppingListEntity);
   if (transfer["haPort"].is<int>()) {
     SETTINGS.haPort = transfer["haPort"].as<int>();
     applied++;

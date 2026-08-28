@@ -23,6 +23,8 @@ class InkBridgeSettings {
   String haHost = "homeassistant.local";
   int haPort = 8123;
   String haToken;
+  // Full entity_id of the HA `todo` list to sync (e.g. "todo.shopping_list").
+  String haShoppingListEntity = "todo.shopping_list";
 
   // A script quick-action button shown in the main menu's Scripts list.
   // `id` is the part after "script." — run via script.turn_on + entity_id.
@@ -45,11 +47,34 @@ class InkBridgeSettings {
   String apSsid = "inkbridge";
   String apPassword;
 
+  // One HA todo-list item, mirrored locally. `dirty` means the checked state
+  // was toggled on-device since the last successful push to HA — it's local
+  // runtime state, never sent to/read from the web config API. This is also
+  // the whole conflict policy: reconcile() pushes whenever `dirty` is true
+  // and pulls HA's value otherwise, so a dirty item always wins regardless
+  // of what else changed remotely (HA gives no per-item timestamp to compare
+  // against, so "local touched it since last sync" is the only signal used).
+  struct ShoppingItem {
+    String uid;
+    String text;
+    bool checked = false;
+    bool dirty = false;
+  };
+  // JSON array of ShoppingItem, mutated by ShoppingListActivity via
+  // setShoppingList() + saveShoppingList() — not part of the web config API's
+  // settings payload (see ConfigWebServer).
+  String shoppingItems = "[]";
+
   void load();
   void save() const;
+  // Narrow NVS write: touches only the shopping-list key, so a checkbox tap
+  // never rewrites haToken/wifiNetworks/etc. like save() would.
+  void saveShoppingList() const;
 
   std::vector<ScriptButton> scripts() const;
   std::vector<WifiNetwork> wifis() const;
+  std::vector<ShoppingItem> shoppingList() const;
+  void setShoppingList(const std::vector<ShoppingItem>& items);
 
  private:
   InkBridgeSettings() = default;

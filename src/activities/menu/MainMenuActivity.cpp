@@ -3,6 +3,7 @@
 #include "../../components/Icons.h"
 #include "../ActivityManager.h"
 #include "../scripts/ScriptRunActivity.h"
+#include "../shopping/ShoppingListActivity.h"
 #include "../transfer/TransferActivity.h"
 
 void MainMenuActivity::onEnter() {
@@ -27,7 +28,14 @@ void MainMenuActivity::render() {
   }
 
   int scriptCount = (int)scripts.size();
-  const char* label = selected < scriptCount ? scripts[selected].label.c_str() : TR(TRANSFER);
+  const char* label;
+  if (selected < scriptCount) {
+    label = scripts[selected].label.c_str();
+  } else if (selected == scriptCount) {
+    label = TR(TRANSFER);
+  } else {
+    label = TR(SHOPPING_LIST);
+  }
   UiChrome::drawFooter(label);
 }
 
@@ -45,8 +53,10 @@ void MainMenuActivity::drawRow(int index, int y, bool rowSelected) {
   int scriptCount = (int)scripts.size();
   if (index < scriptCount) {
     Icons::byKey(g, cx, cy, fg, scripts[index].icon);
-  } else {
+  } else if (index == scriptCount) {
     Icons::wifi(g, cx, cy, fg);
+  } else {
+    Icons::shoppingCart(g, cx, cy, fg);
   }
 }
 
@@ -54,7 +64,9 @@ void MainMenuActivity::onSelectRow(int index) {
   int scriptCount = (int)scripts.size();
   if (index < scriptCount) {
     activityManager.pushActivity(std::make_unique<ScriptRunActivity>(scripts[index]));
-  } else {
+  } else if (index == scriptCount) {
     activityManager.pushActivity(std::make_unique<TransferActivity>());
+  } else {
+    activityManager.pushActivity(std::make_unique<ShoppingListActivity>());
   }
 }

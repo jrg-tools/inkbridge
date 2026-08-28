@@ -17,6 +17,8 @@ enum class StrId : uint8_t {
   NOTHING_HERE,
   PASSWORD,
   SEND_FAILED,
+  SHOPPING_LIST,
+  SYNC_FAILED_HINT,
   COUNT,
 };
 
@@ -49,6 +51,8 @@ class I18n {
           "Nothing here",
           "Pass:",
           "Could not send",
+          "Shopping list",
+          "Not synced",
       },
       // ES
       {
@@ -61,6 +65,8 @@ class I18n {
           "Nada aquí",
           "Clave:",
           "No se pudo enviar",
+          "Lista de compras",
+          "Sin sincronizar",
       },
   };
 };
