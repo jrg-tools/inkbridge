@@ -17,7 +17,7 @@ int MainMenuActivity::cellSize() const {
 void MainMenuActivity::render() {
   auto& g = display.gfx();
   g.fillScreen(GxEPD_WHITE);
-  drawHeader();
+  UiChrome::drawHeader(nullptr, /*idleSleepEligible=*/true);
 
   int size = cellSize();
   int count = rowCount();

@@ -8,7 +8,11 @@ freeink-sdk gen_icons.py tool available.
 import pathlib
 import subprocess
 
-SIZE = 20  # bitmap width/height in px
+SIZE = 20  # bitmap width/height in px, for menu/row icons
+SIZE_SMALL = 12  # for chrome-scale icons (header status), too tight for HEADER_H otherwise
+
+# Identifiers (from ICONS below) also rendered at SIZE_SMALL, as "<ident>_sm".
+SMALL_VARIANTS = {"moon", "zap"}
 
 # (C identifier, Lucide icon name, SVG child elements)
 ICONS = [
@@ -98,14 +102,11 @@ def main():
     header.append('namespace IconBitmaps {')
     header.append('')
     header.append(f'constexpr int ICON_SIZE = {SIZE};')
+    header.append(f'constexpr int ICON_SIZE_SMALL = {SIZE_SMALL};')
     header.append('')
 
-    names = []
-    for ident, lucide_name, elements in ICONS:
-        svg = svg_for(elements)
-        gray = rasterize(svg, SIZE)
-        packed, row_bytes = pack_bits(gray, SIZE)
-        names.append((ident, lucide_name))
+    def emit(ident, lucide_name, gray, size, row_bytes):
+        packed, _ = pack_bits(gray, size)
         header.append(f'// lucide: {lucide_name}')
         header.append(f'constexpr uint8_t {ident}[{len(packed)}] = {{')
         for i in range(0, len(packed), row_bytes):
@@ -114,6 +115,18 @@ def main():
             header.append(f'    {hexes},')
         header.append('};')
         header.append('')
+
+    names = []
+    for ident, lucide_name, elements in ICONS:
+        svg = svg_for(elements)
+        names.append((ident, lucide_name))
+
+        gray = rasterize(svg, SIZE)
+        emit(ident, lucide_name, gray, SIZE, (SIZE + 7) // 8)
+
+        if ident in SMALL_VARIANTS:
+            gray_sm = rasterize(svg, SIZE_SMALL)
+            emit(f'{ident}_sm', lucide_name, gray_sm, SIZE_SMALL, (SIZE_SMALL + 7) // 8)
 
     header.append('}  // namespace IconBitmaps')
     header.append('')

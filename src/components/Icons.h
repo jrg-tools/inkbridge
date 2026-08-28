@@ -20,8 +20,25 @@ class Icons {
                  color);
   }
 
+  // Same, at the smaller chrome-scale size (IconBitmaps::ICON_SIZE_SMALL) —
+  // for spots too tight for the full menu-icon size, like the header.
+  static void drawSmall(Adafruit_GFX& g, int cx, int cy, const uint8_t* bitmap, uint16_t color) {
+    int half = IconBitmaps::ICON_SIZE_SMALL / 2;
+    g.drawBitmap(cx - half, cy - half, bitmap, IconBitmaps::ICON_SIZE_SMALL,
+                 IconBitmaps::ICON_SIZE_SMALL, color);
+  }
+
   static void wifi(Adafruit_GFX& g, int cx, int cy, uint16_t color) {
     draw(g, cx, cy, IconBitmaps::wifi, color);
+  }
+
+  // Header status icons (small variants): moon for "idle-sleep applies on
+  // this screen", zap for "USB connected".
+  static void moonSmall(Adafruit_GFX& g, int cx, int cy, uint16_t color) {
+    drawSmall(g, cx, cy, IconBitmaps::moon_sm, color);
+  }
+  static void zapSmall(Adafruit_GFX& g, int cx, int cy, uint16_t color) {
+    drawSmall(g, cx, cy, IconBitmaps::zap_sm, color);
   }
 
   // Picks an icon by the config-facing key string ("bulb"/"toggle"/"moon"/

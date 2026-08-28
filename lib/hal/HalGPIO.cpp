@@ -1,5 +1,8 @@
 #include "HalGPIO.h"
 
+#include <driver/gpio.h>
+#include <esp_sleep.h>
+
 namespace {
 // Button wiring: A -> D6, B -> D7, switch to GND.
 constexpr int BTN_PINS[HalGPIO::BTN_COUNT] = {D6, D7};
@@ -72,3 +75,17 @@ void HalGPIO::update() {
 bool HalGPIO::wasShortPressed(uint8_t btn) const { return buttons[btn].shortEvent; }
 
 bool HalGPIO::wasLongPressed(uint8_t btn) const { return buttons[btn].longEvent; }
+
+bool HalGPIO::anyEventThisFrame() const {
+  for (const auto& b : buttons) {
+    if (b.shortEvent || b.longEvent) return true;
+  }
+  return false;
+}
+
+void HalGPIO::prepareForSleep() const {
+  for (const auto& b : buttons) {
+    gpio_wakeup_enable((gpio_num_t)b.pin, GPIO_INTR_LOW_LEVEL);
+  }
+  esp_sleep_enable_gpio_wakeup();
+}

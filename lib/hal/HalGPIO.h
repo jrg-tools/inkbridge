@@ -23,6 +23,13 @@ class HalGPIO {
 
   bool wasShortPressed(uint8_t btn) const;  // released before LONG_PRESS_MS
   bool wasLongPressed(uint8_t btn) const;   // held past LONG_PRESS_MS (once)
+  bool anyEventThisFrame() const;           // any short/long press, either button
+
+  // Arms both button GPIOs as light-sleep wake sources (neither pin is RTC-
+  // capable, so deep sleep's ext0/ext1 wakeup can't be used here — light
+  // sleep's GPIO wakeup works on any digital pin). Call begin() again after
+  // waking to restore the normal FALLING-edge interrupt config.
+  void prepareForSleep() const;
 
  private:
   struct ButtonState {
