@@ -10,17 +10,24 @@
 // only two buttons — no on-device add/remove/rename (there's no on-device
 // text entry anywhere in this codebase; item existence is always HA's call).
 //
-// Sync runs once per onEnter(): fetch the HA list, reconcile it against the
-// local list (see reconcile() — a locally-dirty item always wins and gets
-// pushed, since HA exposes no per-item timestamp to compare against any
-// other way), push what needs pushing, then persist. If WiFi/HA is
-// unreachable, or no entity is configured, the local cached list is still
-// shown/toggleable — this screen's job is the list, not the network call.
-// Checked items sink to the bottom (see sortItems()) so the top of the list
-// is always what's still left to buy.
+// Sync runs once per onEnter(), in the background: fetch the HA list,
+// reconcile it against the local list (see reconcile() — a locally-dirty
+// item always wins and gets pushed, since HA exposes no per-item timestamp
+// to compare against any other way), push what needs pushing, then persist.
+// The list stays visible and fully interactive the whole time — nav and
+// toggling never block on the network — with a small blinking dot in the
+// header (see UiChrome::drawHeader's `syncFrame`) as the only cue a sync is
+// still running. A toggle made mid-sync is folded into whatever's still in
+// flight: before the HA fetch lands it's just picked up by reconcile() like
+// any other locally-dirty item; once pushing has started, onSelectRow()
+// queues it itself if it isn't already queued (see loop()'s PUSHING branch).
+// If WiFi/HA is unreachable, or no entity is configured, the local cached
+// list is still shown/toggleable — this screen's job is the list, not the
+// network call. Checked items sink to the bottom (see sortItems()) so the
+// top of the list is always what's still left to buy.
 //
 //   A short: next row   A long: previous row
-//   B short: toggle checked (once synced)   B long: back (any time)
+//   B short: toggle checked (anytime, even mid-sync)   B long: back (any time)
 class ShoppingListActivity : public UiListActivity {
  public:
   ShoppingListActivity() : UiListActivity("ShoppingList") {}
@@ -28,15 +35,28 @@ class ShoppingListActivity : public UiListActivity {
   void onEnter() override;
   void onExit() override;
   void loop() override;
-  void render() override;
 
  protected:
   int rowCount() const override { return (int)items.size(); }
   void drawRow(int index, int y, bool selected) override;
+  // Two lines tall (see drawRow()) — an item name that doesn't fit on one
+  // line wraps onto a second instead of getting truncated, since this
+  // screen's rows are just item names with no secondary detail line to give
+  // up. rowHeight() is uniform across all rows (UiListActivity's scroll math
+  // assumes it), so every row gets the two-line box even when an item's
+  // name is short enough to fit on one.
+  int rowHeight() const override;
   void onSelectRow(int index) override;
   void onBack() override;
-  void drawHeader() override { UiChrome::drawHeader(TR(SHOPPING_LIST)); }
-  const char* footerLabel() const override { return syncOk ? nullptr : TR(SYNC_FAILED_HINT); }
+  void drawHeader() override {
+    UiChrome::drawHeader(TR(SHOPPING_LIST), state == SyncState::DONE ? -1 : spinnerFrame);
+  }
+  // Only a truly-finished (state == DONE), non-ok sync counts as "failed" —
+  // while CONNECTING/PUSHING, syncOk is still false but nothing has failed
+  // yet, so the hint would otherwise flash incorrectly during every sync.
+  const char* footerLabel() const override {
+    return (state == SyncState::DONE && !syncOk) ? TR(SYNC_FAILED_HINT) : nullptr;
+  }
 
  private:
   enum class SyncState { CONNECTING, PUSHING, DONE };
@@ -50,6 +70,12 @@ class ShoppingListActivity : public UiListActivity {
   // group is otherwise preserved.
   void sortItems();
   String truncateToWidth(const String& text, int maxWidth) const;
+  // Finds the byte offset (always a whole UTF-8 codepoint boundary) where
+  // `text` should break so its first line fits within maxWidth — prefers
+  // the last space before the break (whole-word wrap), falling back to a
+  // straight cut only when there's no space to break at (e.g. one long
+  // word/URL).
+  int wrapPoint(const String& text, int maxWidth) const;
 
   HomeAssistantClient haClient;
   WifiConnector connector;

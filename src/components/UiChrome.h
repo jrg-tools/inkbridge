@@ -12,15 +12,21 @@ class UiChrome {
   // Screen title in the top-left, bold, with a short rule underneath (just
   // the title's width) so a submenu makes clear which screen it is.
   // Omit/empty for a blank title (e.g. the root menu, which needs no "you
-  // are here"). Right side is blank by default and only ever shows one of
-  // two transient status icons: a lightning bolt when USB is plugged in
+  // are here"). Right side is blank by default and shows one of three
+  // transient status indicators: a lightning bolt when USB is plugged in
   // (native-USB SOF detection — only fires for an actual host like a
-  // computer, not a plain power brick with no data lines), else a moon in
-  // the short window right before it actually naps (sleep applies on any
-  // screen except while the config web server is running — see main.cpp
-  // and ConfigWebServer::anyRunning() — so this is computed the same way
-  // here, not passed in per screen).
-  static void drawHeader(const char* title = nullptr) {
+  // computer, not a plain power brick with no data lines), a moon in the
+  // short window right before it actually naps (sleep applies on any screen
+  // except while the config web server is running — see main.cpp and
+  // ConfigWebServer::anyRunning() — so this is computed the same way here,
+  // not passed in per screen), or — when `syncFrame` is >= 0 — a blinking
+  // dot for a screen with a background sync in flight (e.g.
+  // ShoppingListActivity, which stays interactive while it syncs, so this
+  // dot is the only cue that a network call is still running; there's no
+  // room in an 18px header for the full dot-ring spinner()). `syncFrame`
+  // takes priority over the USB/sleep icons since it means the caller has
+  // something more specific to say than the generic defaults.
+  static void drawHeader(const char* title = nullptr, int syncFrame = -1) {
     auto& g = display.gfx();
     auto& t = display.text();
     t.setFont(UITheme::FONT_SMALL);
@@ -38,7 +44,13 @@ class UiChrome {
     }
 
     int iconCx = g.width() - 9, iconCy = UITheme::HEADER_H / 2;
-    if (Serial.isPlugged()) {
+    if (syncFrame >= 0) {
+      if ((syncFrame / 2) % 2 == 0) {
+        g.fillCircle(iconCx, iconCy, 3, GxEPD_BLACK);
+      } else {
+        g.drawCircle(iconCx, iconCy, 3, GxEPD_BLACK);
+      }
+    } else if (Serial.isPlugged()) {
       Icons::zapSmall(g, iconCx, iconCy, GxEPD_BLACK);
     } else if (!ConfigWebServer::anyRunning() && IdleSleep::nearTimeout()) {
       Icons::moonSmall(g, iconCx, iconCy, GxEPD_BLACK);

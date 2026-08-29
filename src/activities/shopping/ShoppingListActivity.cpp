@@ -5,7 +5,6 @@
 
 #include <algorithm>
 
-#include "../../components/Icons.h"
 #include "../../components/UiChrome.h"
 #include "../../components/UITheme.h"
 #include "../../i18n/I18n.h"
@@ -45,10 +44,14 @@ void ShoppingListActivity::loop() {
     return;
   }
 
-  if (state == SyncState::DONE) {
-    UiListActivity::loop();
-    return;
-  }
+  // Nav/select run every tick regardless of sync state — the whole point of
+  // syncing in the background is that browsing/toggling never waits on the
+  // network. A toggle mid-CONNECTING is picked up by reconcile() below like
+  // any other locally-dirty item; a toggle mid-PUSHING is handled by
+  // onSelectRow() itself queuing it if needed.
+  UiListActivity::loop();
+
+  if (state == SyncState::DONE) return;
 
   if (state == SyncState::CONNECTING) {
     auto status = connector.update();
@@ -56,8 +59,23 @@ void ShoppingListActivity::loop() {
       haClient.begin(SETTINGS.haHost, SETTINGS.haPort, SETTINGS.haToken);
       std::vector<HomeAssistantClient::TodoItem> remote;
       if (haClient.getTodoItems(SETTINGS.haShoppingListEntity, remote)) {
+        // reconcile() rebuilds `items` in HA's order, which can move the
+        // currently-selected row — follow it by uid so browsing doesn't get
+        // yanked out from under the user when the background sync lands.
+        String selUid =
+            (selected >= 0 && selected < (int)items.size()) ? items[selected].uid : String();
         reconcile(remote);
         sortItems();
+        if (!selUid.isEmpty()) {
+          for (int i = 0; i < (int)items.size(); i++) {
+            if (items[i].uid == selUid) {
+              selected = i;
+              break;
+            }
+          }
+        }
+        if (selected >= (int)items.size()) selected = items.empty() ? 0 : (int)items.size() - 1;
+        clampScroll();
         if (pushQueue.empty()) {
           finishSync();
           syncOk = true;
@@ -82,8 +100,8 @@ void ShoppingListActivity::loop() {
     return;
   }
 
-  // PUSHING: one todo.update_item per loop() tick, so the back button stays
-  // responsive and the spinner keeps animating across a batch of pushes
+  // PUSHING: one todo.update_item per loop() tick, so nav/select stays
+  // responsive and the header dot keeps blinking across a batch of pushes
   // instead of one long blocking burst.
   const String& uid = pushQueue[pushIndex];
   bool checked = false;
@@ -176,6 +194,15 @@ void ShoppingListActivity::onSelectRow(int index) {
   String uid = items[index].uid;
   items[index].checked = !items[index].checked;
   items[index].dirty = true;
+  // A push batch already in flight built its queue before this toggle
+  // happened, so a newly-dirtied item needs adding by hand or it'd sit
+  // unpushed until the next sync — unless it's already queued (e.g. it was
+  // dirty, got toggled back), in which case the in-flight push will just
+  // pick up its current `checked` value when it gets there.
+  if (state == SyncState::PUSHING &&
+      std::find(pushQueue.begin(), pushQueue.end(), uid) == pushQueue.end()) {
+    pushQueue.push_back(uid);
+  }
   sortItems();
   // Follow the toggled item to its new row, since it just moved (checked
   // items sink to the bottom) — otherwise `selected` would silently land on
@@ -192,15 +219,11 @@ void ShoppingListActivity::onSelectRow(int index) {
   requestUpdate();
 }
 
-void ShoppingListActivity::render() {
-  if (state == SyncState::DONE) {
-    UiListActivity::render();
-    return;
-  }
-  auto& g = display.gfx();
-  g.fillScreen(GxEPD_WHITE);
-  UiChrome::drawHeader(TR(SHOPPING_LIST));
-  Icons::spinner(g, g.width() / 2, g.height() / 2, 36, spinnerFrame);
+int ShoppingListActivity::rowHeight() const {
+  auto& t = display.text();
+  t.setFont(UITheme::FONT_BODY);
+  int lineH = t.getFontAscent() - t.getFontDescent();
+  return lineH * 2 + 8;  // two lines + top/bottom padding, no inter-line gap
 }
 
 void ShoppingListActivity::drawRow(int index, int y, bool rowSelected) {
@@ -228,18 +251,59 @@ void ShoppingListActivity::drawRow(int index, int y, bool rowSelected) {
 
   int textX = boxX + boxSize + 6;
   int maxW = g.width() - textX - 8;  // leave room for the scrollbar gutter
-  String label = truncateToWidth(item.text, maxW);
 
   t.setFont(UITheme::FONT_BODY);
   t.setForegroundColor(GxEPD_BLACK);
-  int baseline = y + (h + t.getFontAscent()) / 2;
-  t.setCursor(textX, baseline);
-  t.print(label);
+  int ascent = t.getFontAscent();
+  int lineH = ascent - t.getFontDescent();
 
-  if (item.checked) {
-    int textW = t.getUTF8Width(label.c_str());
-    g.drawFastHLine(textX, y + h / 2, textW, GxEPD_BLACK);
+  int split = wrapPoint(item.text, maxW);
+  String line1, line2;
+  if (split >= (int)item.text.length()) {
+    line1 = item.text;
+  } else {
+    line1 = item.text.substring(0, split);
+    line1.trim();
+    String rest = item.text.substring(split);
+    rest.trim();
+    line2 = truncateToWidth(rest, maxW);
   }
+
+  int baseline1 = line2.length() ? y + (h - lineH * 2) / 2 + ascent : y + (h + ascent) / 2;
+  t.setCursor(textX, baseline1);
+  t.print(line1);
+  if (item.checked) {
+    g.drawFastHLine(textX, baseline1 - ascent / 2, t.getUTF8Width(line1.c_str()), GxEPD_BLACK);
+  }
+
+  if (line2.length()) {
+    int baseline2 = baseline1 + lineH;
+    t.setCursor(textX, baseline2);
+    t.print(line2);
+    if (item.checked) {
+      g.drawFastHLine(textX, baseline2 - ascent / 2, t.getUTF8Width(line2.c_str()), GxEPD_BLACK);
+    }
+  }
+}
+
+int ShoppingListActivity::wrapPoint(const String& text, int maxWidth) const {
+  auto& t = display.text();
+  t.setFont(UITheme::FONT_BODY);
+
+  int lastSpace = -1;
+  int prevFit = 0;
+  for (size_t i = 1; i <= text.length(); i++) {
+    // Skip UTF-8 continuation bytes so width is only ever measured, and the
+    // cut only ever made, at a whole codepoint boundary (see
+    // truncateToWidth()'s comment on why).
+    if (i < text.length() && (text[i] & 0xC0) == 0x80) continue;
+    if (t.getUTF8Width(text.substring(0, i).c_str()) > maxWidth) {
+      return lastSpace > 0 ? lastSpace : prevFit;
+    }
+    prevFit = i;
+    if (text[i - 1] == ' ') lastSpace = i;
+  }
+  return text.length();
 }
 
 String ShoppingListActivity::truncateToWidth(const String& text, int maxWidth) const {
