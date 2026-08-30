@@ -8,7 +8,11 @@
 // Gestures: a press is either SHORT (released before LONG_PRESS_MS) or LONG
 // (fires once when the threshold is crossed, while still held) — never both.
 // A GPIO interrupt latches press edges so presses aren't lost while the main
-// loop is blocked (e-ink refreshes take 0.3-2s).
+// loop is blocked (e-ink refreshes take 0.3-2s). It only latches a full
+// press-and-release cycle whose line was actually held low for a real
+// press's duration, not just any edge — see handleIsr() — so an electrical
+// glitch during a refresh's higher-voltage waveform doesn't get replayed as
+// a phantom click once polling resumes.
 class HalGPIO {
  public:
   static constexpr uint8_t BTN_A = 0;
@@ -33,12 +37,12 @@ class HalGPIO {
   // Arms both button GPIOs as light-sleep wake sources (neither pin is RTC-
   // capable, so deep sleep's ext0/ext1 wakeup can't be used here — light
   // sleep's GPIO wakeup works on any digital pin). Call begin() again after
-  // waking to restore the normal FALLING-edge interrupt config.
+  // waking to restore the normal CHANGE-edge interrupt config.
   void prepareForSleep() const;
 
   // Discards all debounce/latch state, including any queued isrLatchCount.
   // Call right after waking from sleep: arming the GPIO wakeup source
-  // reprograms the same interrupt-type register the normal FALLING-edge
+  // reprograms the same interrupt-type register the normal CHANGE-edge
   // ISR uses, so it fires repeatedly (level-triggered) for as long as the
   // waking press is held — without this, that gets replayed as several
   // phantom short-presses once polling resumes. The press that woke the
@@ -59,6 +63,11 @@ class HalGPIO {
     // (not a flag) so several clicks during a 2-4s full refresh all replay.
     volatile uint8_t isrLatchCount = 0;
     volatile uint32_t isrLatchMs = 0;
+    // Pulse-width tracking for the ISR's own falling/rising pair, so a brief
+    // electrical glitch (not a real, sustained press) doesn't get counted
+    // above — see handleIsr().
+    volatile uint32_t isrFallMs = 0;
+    volatile bool isrPendingFall = false;
   };
   static void IRAM_ATTR handleIsr(void* arg);
   ButtonState buttons[BTN_COUNT];

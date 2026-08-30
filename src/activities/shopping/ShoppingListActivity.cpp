@@ -184,9 +184,15 @@ void ShoppingListActivity::finishSync() {
 }
 
 void ShoppingListActivity::sortItems() {
-  std::stable_sort(items.begin(), items.end(),
-                    [](const InkBridgeSettings::ShoppingItem& a,
-                       const InkBridgeSettings::ShoppingItem& b) { return a.checked < b.checked; });
+  std::stable_sort(
+      items.begin(), items.end(),
+      [](const InkBridgeSettings::ShoppingItem& a, const InkBridgeSettings::ShoppingItem& b) {
+        if (a.checked != b.checked) return a.checked < b.checked;
+        String la = a.text, lb = b.text;
+        la.toLowerCase();
+        lb.toLowerCase();
+        return la < lb;
+      });
 }
 
 void ShoppingListActivity::onSelectRow(int index) {

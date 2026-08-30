@@ -23,8 +23,13 @@
 // queues it itself if it isn't already queued (see loop()'s PUSHING branch).
 // If WiFi/HA is unreachable, or no entity is configured, the local cached
 // list is still shown/toggleable — this screen's job is the list, not the
-// network call. Checked items sink to the bottom (see sortItems()) so the
-// top of the list is always what's still left to buy.
+// network call. Rows are ordered alphabetically with checked ("already
+// bought") items sunk to the bottom (see sortItems()), so the top of the
+// list is always what's still left to buy. That ordering is a pure function
+// of each item's (checked, text) — not of arrival order — so it comes out
+// identical no matter what order onEnter()'s load, a background reconcile(),
+// or a toggle produced `items` in; the only thing that ever visibly moves a
+// row mid-session is its own checked state crossing the top/bottom split.
 //
 //   A short: next row   A long: previous row
 //   B short: toggle checked (anytime, even mid-sync)   B long: back (any time)
@@ -65,9 +70,11 @@ class ShoppingListActivity : public UiListActivity {
 
   void reconcile(const std::vector<HomeAssistantClient::TodoItem>& remote);
   void finishSync();
-  // Stable-sorts `items` so checked ("already bought") items sink to the
-  // bottom, unchecked ones stay on top, and relative order within each
-  // group is otherwise preserved.
+  // Sorts `items` by (checked, case-insensitive text) — checked items sink
+  // to the bottom, and each group is alphabetical. A pure function of the
+  // items themselves, not their prior order, so re-running it (as every
+  // load, reconcile, and toggle does) never reshuffles anything beyond
+  // whatever just changed checked state.
   void sortItems();
   String truncateToWidth(const String& text, int maxWidth) const;
   // Finds the byte offset (always a whole UTF-8 codepoint boundary) where

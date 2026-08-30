@@ -8,11 +8,39 @@ namespace {
 constexpr int BTN_PINS[HalGPIO::BTN_COUNT] = {D6, D7};
 }  // namespace
 
+// A real press holds the pin low for tens of ms at minimum — even the
+// fastest deliberate tap comfortably clears this — while an electrical
+// glitch (e.g. the e-ink panel's higher-voltage waveform during a full
+// refresh coupling into the button line) pulls the line low only briefly.
+// A single instantaneous level check at ISR-dispatch time isn't enough to
+// tell those apart (a glitch lasting longer than the ISR's few-µs dispatch
+// latency, e.g. from a sustained voltage droop rather than a spike, would
+// still read low) — so instead this measures how long the line was
+// actually held low, between the FALLING and its matching RISING edge, and
+// only counts it as a latch if that span clears MIN_PRESS_MS.
+static constexpr uint32_t MIN_PRESS_MS = 15;
+
 void IRAM_ATTR HalGPIO::handleIsr(void* arg) {
   auto* b = static_cast<ButtonState*>(arg);
   uint32_t now = millis();
-  // Basic ISR-side debounce; the poll loop does the authoritative one.
-  if (now - b->isrLatchMs >= DEBOUNCE_MS) {
+  // gpio_get_level, not digitalRead — this must stay flash-cache-safe since
+  // it can fire mid flash write.
+  if (gpio_get_level((gpio_num_t)b->pin) == 0) {
+    // Falling edge: just remember when. Re-arms on every fall, including
+    // bounce during the press itself, so only the last fall before the
+    // press actually settles ends up paired with the real release below.
+    b->isrFallMs = now;
+    b->isrPendingFall = true;
+    return;
+  }
+  // Rising edge with no fall on record (a stray glitch on an already-high
+  // line, or the tail of bounce already resolved elsewhere) — nothing to
+  // measure against.
+  if (!b->isrPendingFall) return;
+  b->isrPendingFall = false;
+  // Basic ISR-side debounce (below) against double-counting the same
+  // press; the poll loop does the authoritative one.
+  if (now - b->isrFallMs >= MIN_PRESS_MS && now - b->isrLatchMs >= DEBOUNCE_MS) {
     if (b->isrLatchCount < 255) b->isrLatchCount++;
     b->isrLatchMs = now;
   }
@@ -22,7 +50,7 @@ void HalGPIO::begin() {
   for (uint8_t i = 0; i < BTN_COUNT; i++) {
     buttons[i].pin = BTN_PINS[i];
     pinMode(buttons[i].pin, INPUT_PULLUP);
-    attachInterruptArg(buttons[i].pin, handleIsr, &buttons[i], FALLING);
+    attachInterruptArg(buttons[i].pin, handleIsr, &buttons[i], CHANGE);
   }
 }
 
@@ -46,9 +74,11 @@ void HalGPIO::update() {
         // it isn't replayed a second time below.
         if (b.isrLatchCount > 0) b.isrLatchCount--;
       } else {
-        // Release seen by polling: any latches accumulated during the hold
-        // are contact-bounce artifacts (FALLING edges on release), not real
-        // presses — drop them or they replay as phantom clicks.
+        // Release seen by polling: this same press was already tracked
+        // above (pressedAtMs/stable), so any latches the ISR counted during
+        // the hold are re-presses that happened before polling caught the
+        // release, not new distinct clicks — drop them or they'd replay as
+        // phantom clicks once this release is processed.
         b.isrLatchCount = 0;
         if (!b.longFired) {
           b.shortEvent = true;  // released before the long-press threshold
@@ -102,5 +132,7 @@ void HalGPIO::resetState() {
     b.pressedAtMs = 0;
     b.isrLatchCount = 0;
     b.isrLatchMs = now;
+    b.isrFallMs = now;
+    b.isrPendingFall = false;
   }
 }
