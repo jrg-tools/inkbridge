@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-build_case.py -- Parametric FreeCAD Part-API generator for a snap-fit
+build_case.py -- Parametric FreeCAD Part-API generator for a bolted
 enclosure for a portable ESP32-S3 device (e-ink display + 2 mechanical
 switches + LiPo battery), split into TWO printed parts (a bottom TRAY and
-a top LID) joined by a continuous perimeter hook-and-lip snap, interrupted
-at the USB-C port.
+a top LID) joined by four M2 countersunk screws (same system as AB98's
+case): the screws go horizontally through the tray's long walls into M2
+heat-set inserts in tabs that hang down from the lid past the seam.
 
 RUN IT
 ------
@@ -16,8 +17,8 @@ fresh in-memory document each time).
 Outputs, written next to this script:
     case_bottom.stl            -- the tray, PRINT THIS (bed-ready: Z=0 is
                                    the floor's underside)
-    case_top.stl                -- the lid, PRINT THIS (bed-ready: Z=0 is
-                                   the skirt's free tip)
+    case_top.stl                -- the lid, PRINT THIS (bed-ready: flipped
+                                   ceiling-down, screw tabs pointing up)
     case_assembled_preview.stl   -- both parts in their correct assembled
                                    position, for a visual fit-check in any
                                    STL viewer. NOT for printing -- it's a
@@ -75,26 +76,24 @@ and rises above by design (this is how mechanical keyboards work). That
 keeps the case a flat, uniform-height prism instead of needing a stepped
 top to bury the switch's full housing height.
 
-SNAP FIT: a continuous chamfered bead-in-groove around the tray/lid
-perimeter, interrupted only at the USB-C notch, sized and checked against
-PLA's real elongation-at-break (read from HARDWARE.md when present) via
-snap_fit_strain() (section 6). No separate alignment pins -- the
-bead/groove engagement plus the switch plate-hole engagement register the
-lid in X/Y between them.
+CLOSURE: a flat butt joint at the seam, held by four M2 countersunk
+screws (DIN 965, M2x4) through the tray's -Y and +Y walls into M2x3
+heat-set inserts in tabs hanging from the lid's ceiling (section 3's
+"Lid screws"). The tabs sit in the gap between the battery and the long
+walls and also register the lid in X/Y. Nothing reaches into the cavity
+from the tray, so the parts drop straight in.
 
-A second, smaller detent grips the display module itself against the
+A small detent grips the display module itself against the
 lid's screen retention wall (screen_snap_strain(), section 6) -- the
 rigid module plays the "bead" half, the thin cantilevered screen_wall
-plays the "groove" half, same physics as the main snap above just
-checked separately since its thickness/flex-length differ. It's an
+plays the "groove" half. It's an
 XY-plane (sideways) squeeze, not a Z-axis hook, because the Z room above
 the display (STACK_TOP_MARGIN, 0.5mm) is too tight for a cantilever to
 ever spring rather than jam -- see "Screen retention" in section 3.
 
 VISIBLE SEAM: sits at the middle of the case height (SEAM_FRACTION=0.5).
-The lid has its own full-height "cap wall" above the seam, flush with the
-tray's own wall, and a thinner skirt hidden inside the tray's cavity below
-the seam purely for the snap engagement.
+The lid has its own "cap wall" above the seam, flush with the tray's own
+wall; only the screw tabs reach below the seam.
 
 ASSUMPTIONS: HARDWARE.md gives XY footprints for the display module and
 MCU but not their Z thickness, and doesn't specify a switch PCB at all.
@@ -103,12 +102,9 @@ not from HARDWARE.md" in section 2, and all of them are also listed
 together in print_summary() under "Assumed / generic figures" so nothing
 is buried.
 
-PLA CAVEAT: PLA's elongation-at-break is roughly 3-5x lower than ABS or
-PETG, which matters for a snap fit meant to be opened/closed repeatedly.
-snap_fit_strain() targets only ~30% of PLA's ultimate elongation as the
-allowable design strain (a fatigue margin, not a one-shot-assembly
-margin) -- see SNAP_STRAIN_SAFETY_FRACTION below. If this case will be
-opened often, consider printing the lid in PETG instead.
+PLA CAVEAT: PLA's elongation-at-break is low, which matters for the
+screen detent; screen_snap_strain() targets only ~30% of it as the
+allowable design strain -- see SNAP_STRAIN_SAFETY_FRACTION below.
 """
 
 import os
@@ -200,19 +196,6 @@ USB_C_CUTOUT_H = 3.0
 # margin built in (see USB_C_CUTOUT_H) to absorb a modest error here.
 USB_C_CENTER_Z_ABOVE_SHELF = 3.0
 
-# microSD slot (the Sense expansion board's card reader): a wall opening
-# so a card can be slid in/out without opening the case, on the same -Y
-# wall as the USB-C port, positioned per the design brief -- 3mm above
-# the USB-C notch's own top edge (MICROSD_GAP_ABOVE_USBC, section 5).
-# ASSUMPTION: neither the slot's exact board-relative position nor its
-# opening size is in HARDWARE.md. Sized for a standard microSD card
-# (11 x 1.0mm cross-section, inserted edge-first) plus clearance for the
-# card and its holder mechanism -- VERIFY against the physical board
-# before printing, same as the USB-C figures above.
-MICROSD_SLOT_W = 12.0       # ASSUMPTION: 11mm card width + slide clearance
-MICROSD_SLOT_H = 2.0        # ASSUMPTION: ~1mm card thickness + holder/clearance margin
-MICROSD_GAP_ABOVE_USBC = 3.0  # per design brief: slot sits 3mm above the USB-C notch's top
-
 # ---- Battery: EEMB 603449 -------------------------------------------
 BATTERY_W = 48.0            # measured on the physical cell (overrides HARDWARE.md's 51mm datasheet figure)
 BATTERY_D = 34.0            # measured on the physical cell (overrides HARDWARE.md's 34.5mm datasheet figure)
@@ -225,10 +208,10 @@ N_SWITCHES = 2
 # LID opening per button. Deliberately separate from SWITCH_HOLE (14mm):
 # SWITCH_HOLE still drives the PCB footprint/plate spec everywhere else
 # in this file, this only enlarges the LID's cutout. At SWITCH_PITCH
-# (19.05mm) two adjacent 19mm squares leave only 0.05mm between their
+# (19.05mm) two adjacent 19.3mm squares would overlap at their
 # edges -- see build_lid()'s comment for why that's cut as ONE merged
 # rectangle instead of two separate (near-)overlapping boxes.
-LID_BUTTON_HOLE = 19.0
+LID_BUTTON_HOLE = 19.3  # +0.3mm key clearance
 # Custom hot-swap PCB: its outline isn't specified anywhere, so this
 # margin beyond the switch bodies is sized generously for solder pads /
 # socket clearance / routing -- 2.0mm is real, usable margin for a
@@ -253,7 +236,10 @@ SWITCH_HOUSING_ABOVE_PCB = 11.6       # PCB top to top of switch upper housing (
 # 3. PRINT / SHELL PARAMETERS
 # ====================================================================
 
-WALL_T = 2.0            # general shell wall thickness (floor, ceiling, sides)
+# Same thicknesses as AB98's case (0.4 nozzle, 0.2 layers):
+WALL_T = 1.6            # side walls: 4 perimeters
+FLOOR_T = 1.6           # tray floor (back)
+CEIL_T = 1.4            # lid ceiling (screen face), 7 layers
 CORNER_FILLET_OUTER = 8.0   # external vertical-corner radius -- "fits in the hand"
 # Outer TOP/BOTTOM edge treatment: rounds the horizontal rim where the flat
 # floor/ceiling face meets the outer wall -- the edges a palm/fingers
@@ -268,12 +254,10 @@ CORNER_FILLET_OUTER = 8.0   # external vertical-corner radius -- "fits in the ha
 # created, approximating a round as a multi-facet profile rather than one
 # flat bevel. Applied early, on the plain outer solid before any other
 # feature, so the chamfer geometry stays simple.
-# 4 stages is the practical ceiling for this OCCT version: a direct sweep
-# against the actual tray/lid shapes shows 5-6 stage sequences at the same
-# ~1.95mm total fail outright ("no suitable edges for chamfer or fillet")
-# even though 4 stages at that total succeeds. The total (1.9mm) stays a
-# comfortable margin under WALL_T/FLOOR_T/CEIL_T (2.0mm).
-OUTER_EDGE_CHAMFER_STAGES = [0.7, 0.5, 0.4, 0.3]
+# 4 stages is the practical ceiling for this OCCT version (5-6 stages fail
+# with "no suitable edges for chamfer or fillet"). The total (1.6mm) still
+# leaves ~1mm of material across the rim's diagonal (WALL_T + CEIL_T = 3mm).
+OUTER_EDGE_CHAMFER_STAGES = [0.6, 0.45, 0.35, 0.2]
 
 # ---- Display window corner/edge treatment (build_lid()) --------------
 # Same rounding idea as CORNER_FILLET_OUTER/OUTER_EDGE_CHAMFER_STAGES
@@ -337,8 +321,8 @@ BATTERY_MCU_GAP = 1.0
 # No lid-side snap TAB hanging from the ceiling: the only Z room
 # available for a tab to hang from the ceiling and flex is
 # STACK_TOP_MARGIN (0.5mm), and a beam that short is thousands of times
-# stiffer than the case's own 5.5mm snap skirt (deflection ~ 1/L^3) --
-# it would jam or not touch, never spring.
+# stiffer than a 5mm one (deflection ~ 1/L^3) -- it would jam or not
+# touch, never spring.
 #
 # The display has no posts, shelves, or walls in the TRAY at all (see the
 # module docstring's SUPPORT note) -- it's adhesive/tape-mounted directly
@@ -368,40 +352,33 @@ SCREEN_LENGTH_EXTRA_CLEARANCE = 1.0  # added to lip_w's W-axis (65mm) span only,
 # cantilever anyway) or the +X segment (already interrupted by
 # SCREEN_WALL_BUTTON_NOTCH_W). Both long sides have >5mm of open cavity
 # beyond them before the next exterior wall (see build_lid()), plenty of
-# room to flex into. Checked separately from the main snap
-# (screen_snap_strain(), section 6) since screen_wall's thickness
-# (SCREEN_WALL_T) and cantilever length (SCREEN_RETENTION_WALL_H, section
-# 5) both differ from the main snap's skirt. Deliberately NOT chamfered
-# like the main bead/groove -- see the detent's own comment in
+# room to flex into. Checked by screen_snap_strain() (section 6).
+# Deliberately NOT chamfered -- see the detent's own comment in
 # build_lid() for why a lead-in ramp isn't worth it at this scale.
 SCREEN_SNAP_INTERFERENCE = 0.15  # d -- see screen_snap_strain() for margin
 SCREEN_SNAP_BAND_H = 1.0         # height of the detent band along the wall
-SCREEN_SNAP_TIP_OFFSET = 0.3     # how far above screen_wall's own free tip the detent sits (BEAD_TIP_OFFSET's analog)
-SCREEN_SNAP_OVERLAP_EPS = 0.1    # guaranteed-fuse overlap into the wall, same idea as OVERLAP_EPS elsewhere
+SCREEN_SNAP_TIP_OFFSET = 0.3     # how far above screen_wall's own free tip the detent sits 
+SCREEN_SNAP_OVERLAP_EPS = 0.1    # guaranteed-fuse overlap into the wall, avoids OCCT coincident-face fuses
 
-# ---- Snap-fit geometry (see snap_fit_strain() for the math) ----------
-# d (SNAP_INTERFERENCE) must clear 2*SKIRT_CLEARANCE with real margin: at
-# exactly 2*SKIRT_CLEARANCE the bead's tip and the skirt's own clearance-
-# inset surface sit at the identical radius (touching, not overlapping),
-# which produces a mechanism that looks geometrically fine but doesn't
-# actually snap together. 0.5mm here leaves 0.1mm of real engagement
-# above that dead zone.
-SNAP_FLEX_LENGTH = 5.5      # L: cantilever flex length = lid skirt depth (mm)
-SNAP_SKIRT_T = 1.2          # t: thickness of the flexing lid skirt (mm)
-SNAP_INTERFERENCE = 0.5     # d: radial bead/groove interference (mm)
-SNAP_BEAD_BAND_H = 1.2      # height of the bead/groove band along the wall (mm)
-# Chamfer size for the bead/groove ramp (see build_tray()'s comment for
-# why it's a chamfer, not a fillet). The safe range for this OCCT version
-# is NOT a fixed number -- it scales with the bead ring's own radial wall
-# thickness (~SNAP_INTERFERENCE): at the current interference, a direct
-# size sweep against the actual bead/groove rings shows ~0.28-0.30mm+
-# throws a hard OCCT exception (caught by the try/except in
-# build_tray()/build_lid(), which falls back to an unchamfered square
-# ridge -- see the printed WARNING there if that ever triggers), while
-# 0.20mm stays reliably clean with real margin below that boundary.
-# Re-test with a direct sweep any time SNAP_INTERFERENCE, SNAP_BEAD_BAND_H,
-# or BEAD_Z0 change, rather than assuming this value carries over.
-BEAD_CHAMFER_SIZE = 0.2
+# ---- Lid screws (same system as AB98's case) ---------------------------
+# M2 countersunk (DIN 965, M2x4), horizontal, through the tray's -Y and +Y
+# walls into M2x3 heat-set inserts in tabs that hang from the lid's
+# ceiling down past the seam. The tabs sit in the strip between the long
+# walls and the battery (BATTERY_Y0, ~3.5mm), which is what caps TAB_T --
+# so the insert hole runs straight through the tab.
+INSERT_D = 3.2           # hole for the insert (check the insert's datasheet)
+INSERT_LEN = 3.0         # M2x3 insert
+SCREW_D = 2.4            # clearance hole in the wall
+CSK_D = 4.0              # countersink diameter at the wall's outer face (M2 head is 3.8)
+SCREW_CLR = 0.1          # gap between a tab and the tray wall it screws to
+TAB_T = 3.0              # tab thickness along Y (wall normal)
+TAB_W = 6.0              # tab size along the wall (X)
+# Screw X positions (internal coords), on both long walls: one over the
+# battery's end, one in the switch column -- there the tab sits in a notch
+# cut into the switch shelf's side and stops under the switch PCB.
+SCREW_XS = (10.0, 79.5)
+SCREW_BELOW_SEAM = 2.5   # screw centre below the seam: keeps the countersink inside the tray wall
+TAB_BELOW_SCREW = 2.6    # tab material below the screw centre (insert radius + ~1mm)
 
 # ====================================================================
 # 4. DERIVED LAYOUT (plan view) -- SINGLE ROW, FLOOR TO FLOOR: BATTERY,
@@ -540,76 +517,34 @@ SWITCH_SHELF_HEIGHT_BOOST = 1.0
 SWITCH_SHELF_H = SWITCH_PCB_BELOW_CLEARANCE + SWITCH_SHELF_HEIGHT_BOOST
 SWITCH_PCB_TOP_Z = SWITCH_SHELF_H + SWITCH_PCB_THICKNESS
 
-FLOOR_T = WALL_T
-CEIL_T = WALL_T
 EXTERNAL_H = FLOOR_T + INTERNAL_CAVITY_H + CEIL_T
 
 # --------------------------------------------------------------------
 # How the two parts share the internal cavity height, AND where the
-# VISIBLE parting line sits.
-#
-# The tray's wall runs from the floor up to the seam (TRAY_EXTERNAL_H);
-# the lid has its own full-width, WALL_T-thick "cap wall" from the seam up
-# to the ceiling, same profile as the tray's wall so the two meet flush.
-# Below the seam, hidden inside the tray's cavity, the lid's wall
-# continues down as a thin, nested skirt (SNAP_SKIRT_T thick) for
-# ENGAGE_DEPTH more, purely for the snap engagement -- invisible from
-# outside either way. A single flat butt joint between tray wall and lid
-# skirt would leave the two occupying disjoint Z-ranges with no overlap
-# for a bead/groove to ever engage in, which is why the skirt has to
-# nest INSIDE the tray's cavity instead.
-#
-# SEAM_FRACTION controls where the visible seam sits as a fraction of
-# EXTERNAL_H (0.5 = middle).
+# VISIBLE parting line sits: the tray's wall runs from the floor up to
+# the seam (TRAY_EXTERNAL_H); the lid has its own "cap wall" from the seam
+# up to the ceiling, same profile, meeting the tray in a flat butt joint.
+# SEAM_FRACTION is the seam's height as a fraction of EXTERNAL_H.
 SEAM_FRACTION = 0.5
-ENGAGE_DEPTH = SNAP_FLEX_LENGTH  # also the cantilever flex length used below
 
 TRAY_EXTERNAL_H = EXTERNAL_H * SEAM_FRACTION  # the seam itself
 TRAY_WALL_INTERNAL_H = TRAY_EXTERNAL_H - FLOOR_T
-assert TRAY_WALL_INTERNAL_H > ENGAGE_DEPTH + 2.0, (
-    "SEAM_FRACTION puts the seam too close to the floor -- the tray wall "
-    "(%.1fmm) has to be taller than the engagement depth (%.1fmm) plus "
-    "room for the bead" % (TRAY_WALL_INTERNAL_H, ENGAGE_DEPTH))
 
 LID_CAP_WALL_H = INTERNAL_CAVITY_H - TRAY_WALL_INTERNAL_H  # lid's visible wall, seam to ceiling
-LID_EXTERNAL_H = ENGAGE_DEPTH + LID_CAP_WALL_H + CEIL_T
-EXTERNAL_H_CHECK = TRAY_EXTERNAL_H + LID_CAP_WALL_H + CEIL_T
-assert abs(EXTERNAL_H_CHECK - EXTERNAL_H) < 1e-9
+LID_EXTERNAL_H = LID_CAP_WALL_H + CEIL_T  # lid's top face, in its own frame (Z=0 at the seam)
 
-# Global Z the lid's local Z=0 (its skirt's free tip) lands at once seated:
-LID_PLACEMENT_Z = TRAY_EXTERNAL_H - ENGAGE_DEPTH
+# Global Z the lid's local Z=0 (the seam) lands at once seated:
+LID_PLACEMENT_Z = TRAY_EXTERNAL_H
 
-# Per-side running clearance so the skirt can slide freely inside the
-# tray's cavity before it reaches the bead band.
-SKIRT_CLEARANCE = 0.2
-
-# --------------------------------------------------------------------
-# Bead Z-position: the lid's skirt is a cantilever fixed where it meets
-# the cap wall and free at its lower tip. Only the length of skirt
-# BETWEEN the fixed end and wherever the bead pushes actually bends --
-# material beyond the push point just gets carried along, unbent. Since
-# strain scales as 1/L^2 (snap_fit_strain()), the bead needs to sit near
-# the skirt's FREE end (near LID_PLACEMENT_Z), not its fixed end, so the
-# true flex length is close to the full ENGAGE_DEPTH the strain formula
-# assumes -- a bead near the fixed end instead would silently understate
-# the real strain by a large factor.
-#
-# BEAD_TIP_OFFSET is how far short of the exact tip the bead actually
-# sits (headroom so the bead ring doesn't land exactly on the skirt's
-# flat bottom edge). The TRUE distance from the fixed end to the push
-# point is therefore ENGAGE_DEPTH - BEAD_TIP_OFFSET, not ENGAGE_DEPTH
-# itself -- snap_fit_strain() uses that true distance
-# (SNAP_TRUE_FLEX_LENGTH, below), not ENGAGE_DEPTH directly, since even a
-# small gap here matters once squared into the strain formula.
-BEAD_TIP_OFFSET = 0.15  # how far the bead sits above the skirt's free tip
-BEAD_Z0 = LID_PLACEMENT_Z + BEAD_TIP_OFFSET  # near the skirt's free tip, not the rim
-GROOVE_Z0_LOCAL = BEAD_Z0 - LID_PLACEMENT_Z  # == BEAD_TIP_OFFSET, near the lid's own local Z=0
-
-# The TRUE cantilever flex length used by snap_fit_strain() (section 6):
-# distance from the skirt's fixed end (the seam) down to where the bead
-# actually pushes (BEAD_Z0), not the full ENGAGE_DEPTH. See the long
-# comment above for why the two differ by exactly BEAD_TIP_OFFSET.
-SNAP_TRUE_FLEX_LENGTH = ENGAGE_DEPTH - BEAD_TIP_OFFSET
+# Lid screws (global Z), see section 3:
+SCREW_Z = TRAY_EXTERNAL_H - SCREW_BELOW_SEAM
+TAB_Z0 = SCREW_Z - TAB_BELOW_SCREW
+assert TAB_Z0 > FLOOR_T, "screw tabs would reach the tray floor -- raise SEAM_FRACTION"
+assert SCREW_CLR + TAB_T < BATTERY_Y0 - FIT_CLEARANCE_XY, "screw tabs would hit the battery"
+assert TAB_T >= INSERT_LEN, "screw tab thinner than the insert"
+# Switch-column tabs stop this far under the switch PCB (which rests on the shelf top):
+SWITCH_TAB_TOP_Z = FLOOR_T + SWITCH_SHELF_H - 0.2
+assert SWITCH_TAB_TOP_Z > TRAY_EXTERNAL_H + 1.0, "switch-column screw tabs have no cap wall to anchor to"
 
 # How tall the switch stack rises above the finished case's outer top
 # surface -- expected, see the module docstring's SWITCHES note:
@@ -632,91 +567,31 @@ assert SCREEN_RETENTION_WALL_H > 0, (
 USB_C_CENTER_Z = FLOOR_T + MCU_SHELF_CLEARANCE + USB_C_CENTER_Z_ABOVE_SHELF
 
 # USB-C notch Z-range (global), shared by build_tray() and build_lid() so
-# the two openings line up exactly. Sized purely from the connector's own
-# position (USB_C_CENTER_Z, USB_C_CUTOUT_H) plus a placement-tolerance
-# margin -- it has no bead term in it at all, so its size is not driven by
-# the snap bead's own position.
-#
-# It happens to OVERLAP the bead band in Z at the current case height
-# (BEAD_Z0 sits near the middle of the case via SEAM_FRACTION=0.5; the
-# connector is roughly mid-height on the MCU's floor-level shelf too).
-# That overlap isn't a bug to fix by moving the bead -- the bead's
-# Z-position is constrained by the strain calculation (section 6) to stay
-# near the skirt's free tip, and the connector's Z-position is fixed by
-# the hardware. Where they overlap, the notch cut simply removes the
-# bead/groove locally over the notch's own ~9-11mm width -- the
-# "interrupted at the USB-C port" behavior described at the top of this
-# file. It costs a short, harmless gap in an otherwise continuous
-# ~270mm perimeter bead, not a structural problem. Both build_tray() and
-# build_lid() apply the cut unconditionally (it's a no-op wherever there's
-# no material), since which part the port actually falls in depends on
-# SEAM_FRACTION and the component stack -- currently entirely within the
-# lid's cap wall, but this stays correct if that ever shifts.
+# the two openings line up exactly: the connector's own position plus a
+# placement-tolerance margin. Both parts apply the cut unconditionally
+# (a no-op wherever there's no material), since which part the port falls
+# in depends on SEAM_FRACTION and the component stack.
 USB_C_NOTCH_Z0 = USB_C_CENTER_Z - USB_C_CUTOUT_H / 2.0 - 0.5
 USB_C_NOTCH_Z1 = USB_C_CENTER_Z + USB_C_CUTOUT_H / 2.0 + 0.5
 USB_C_NOTCH_HEIGHT = USB_C_NOTCH_Z1 - USB_C_NOTCH_Z0
 assert USB_C_NOTCH_Z0 > FLOOR_T, "USB-C notch would dip into the floor slab"
-
-# microSD slot Z-range (global), same -Y wall as the USB-C notch, same X
-# center (MICROSD_SLOT_X below) -- stacked directly above it per the
-# design brief, MICROSD_GAP_ABOVE_USBC clear of the notch's own top edge.
-# Shared by build_tray() and build_lid() the same way the USB-C notch is
-# (section 8): applied unconditionally in both, a no-op wherever there's
-# no material at that Z, so it stays correct regardless of which part it
-# actually falls in as the constants above change.
-MICROSD_SLOT_Z0 = USB_C_NOTCH_Z1 + MICROSD_GAP_ABOVE_USBC
-MICROSD_SLOT_Z1 = MICROSD_SLOT_Z0 + MICROSD_SLOT_H
-assert MICROSD_SLOT_Z1 < EXTERNAL_H - CEIL_T, (
-    "microSD slot (%.2f-%.2f) runs into the ceiling (%.2f) -- reduce "
-    "MICROSD_GAP_ABOVE_USBC or MICROSD_SLOT_H" % (MICROSD_SLOT_Z0, MICROSD_SLOT_Z1, EXTERNAL_H - CEIL_T))
 
 
 # ====================================================================
 # 6. SNAP-FIT ENGINEERING CHECK
 # ====================================================================
 
-def snap_fit_strain():
-    """Cantilever-beam snap-fit strain, using the standard first-order
-    formula from plastics snap-fit design guides (e.g. Bayer/GE):
+def screen_snap_strain():
+    """Cantilever-beam snap-fit strain for the screen retention wall's
+    detent (section 3's "Screen snap-fit detent"), using the standard
+    first-order formula from plastics snap-fit design guides (Bayer/GE):
 
         strain = 1.5 * deflection * thickness / flex_length^2
 
-    treating the lid's skirt as a cantilever FIXED where it meets the cap
-    wall (its rigid, ceiling-attached end) and FREE at its lower tip,
-    deflected outward by the bead's interference as it rides over the
-    tray's bump during assembly. flex_length is the distance from that
-    fixed end to where the bead actually pushes -- for a cantilever, only
-    the material BETWEEN the fixed end and the push point bends; material
-    beyond the push point just gets carried along. That distance is
-    SNAP_TRUE_FLEX_LENGTH (section 5): ENGAGE_DEPTH minus BEAD_TIP_OFFSET,
-    since the bead sits near the skirt's free tip but not exactly AT it --
-    see BEAD_Z0's comment in section 5. Using plain ENGAGE_DEPTH here
-    instead would overstate flex_length (understating strain, since strain
-    scales as 1/L^2), which is why the true, shorter distance is used.
-    Returns a dict with the computed strain, the allowable strain, and
-    pass/fail.
-    """
-    strain = 1.5 * SNAP_INTERFERENCE * SNAP_SKIRT_T / (SNAP_TRUE_FLEX_LENGTH ** 2)
-    allowable = ELONGATION_AT_BREAK * SNAP_STRAIN_SAFETY_FRACTION
-    margin_pct = (allowable - strain) / strain * 100.0 if strain else float("inf")
-    return {
-        "strain": strain,
-        "allowable": allowable,
-        "passes": strain <= allowable,
-        "margin_pct": margin_pct,
-    }
-
-
-def screen_snap_strain():
-    """Same cantilever-beam formula as snap_fit_strain() above, applied to
-    the screen retention wall's own detent (section 3's "Screen snap-fit
-    detent") instead of the main tray/lid snap: fixed end where
-    screen_wall meets the ceiling, free tip at the wall's bottom edge,
-    true flex length = SCREEN_RETENTION_WALL_H minus SCREEN_SNAP_TIP_OFFSET
-    (the detent sits near the free tip, not at it, same convention as
-    BEAD_TIP_OFFSET), thickness SCREEN_WALL_T. Checked separately from
-    snap_fit_strain() because both t and L differ from the main snap's
-    skirt/bead."""
+    Fixed end where screen_wall meets the ceiling, free tip at the wall's
+    bottom edge; true flex length = SCREEN_RETENTION_WALL_H minus
+    SCREEN_SNAP_TIP_OFFSET (the detent sits near the free tip, not at it),
+    thickness SCREEN_WALL_T."""
     true_flex_length = SCREEN_RETENTION_WALL_H - SCREEN_SNAP_TIP_OFFSET
     strain = 1.5 * SCREEN_SNAP_INTERFERENCE * SCREEN_WALL_T / (true_flex_length ** 2)
     allowable = ELONGATION_AT_BREAK * SNAP_STRAIN_SAFETY_FRACTION
@@ -752,19 +627,6 @@ def rounded_box(w, d, h, radius, origin=Vector(0, 0, 0)):
         return box
     edges = _vertical_edges(box, h)
     return box.makeFillet(radius, edges)
-
-
-def horizontal_band_ring(outer_w, outer_d, outer_r, inset, band_h, z0, origin_xy):
-    """A thin closed ring (outer rounded-rect minus a smaller concentric
-    rounded-rect) of height `band_h` starting at z0. `inset` is how far
-    the inner boundary sits inside the outer one on each side. Used to
-    build both the tray's snap bead and the lid's mating groove cavity."""
-    ox, oy = origin_xy
-    outer = rounded_box(outer_w, outer_d, band_h, outer_r, Vector(ox, oy, z0))
-    inner_r = max(outer_r - inset, 0.1)
-    inner = rounded_box(outer_w - 2 * inset, outer_d - 2 * inset, band_h,
-                         inner_r, Vector(ox + inset, oy + inset, z0))
-    return outer.cut(inner)
 
 
 def shelf_frame(w, d, rim_w, height, z0, origin_xy, floor_r=1.0):
@@ -810,10 +672,9 @@ def outer_footprint_origin():
 
 
 def build_tray():
-    """Bottom shell: floor + a perimeter wall that runs the FULL internal
-    cavity height (its rim meets the ceiling directly, see section 5) +
-    component shelves/fences + an inward snap bead near the rim + the
-    USB-C notch."""
+    """Bottom shell: floor + a perimeter wall up to the seam (section 5) +
+    component shelves/fences + the countersunk lid-screw holes + the USB-C
+    notch."""
     # Solid block for the whole tray height, corners rounded first (cheap
     # and robust), cavities cut afterwards.
     solid = rounded_box(EXTERNAL_W, EXTERNAL_D, TRAY_EXTERNAL_H, CORNER_FILLET_OUTER)
@@ -834,53 +695,15 @@ def build_tray():
                           Vector(WALL_T, WALL_T, FLOOR_T))
     tray = solid.cut(cavity)
 
-    # Snap bead: a ridge on the INSIDE of the tray's cavity wall, near the
-    # rim, protruding INWARD into the cavity by SNAP_INTERFERENCE. The
-    # lid's skirt (built in build_lid()) nests inside this same cavity and
-    # rides past this bead on the way in -- see section 5's docstring for
-    # why the bead has to live on the cavity wall (not the outside face)
-    # for the two parts to actually make contact.
-    bead_z0 = BEAD_Z0  # near the skirt's free tip -- see section 5 for why (strain-calc fix)
-    # OVERLAP_EPS: the bead's outer boundary is grown by this much beyond
-    # the cavity wall's own inner face, and "inset" grown by the same
-    # amount, so the actual protrusion into the cavity (SNAP_INTERFERENCE)
-    # is unchanged but the bead now has real volumetric overlap with the
-    # tray's wall rather than an exactly-coincident face. Needed because
-    # fuse()'ing the CHAMFERED bead onto the tray using an exactly
-    # coincident face left 2 disconnected solids instead of 1 (an OCCT
-    # tolerance issue, confirmed by testing: the unchamfered bead fused
-    # cleanly, the chamfered one did not) -- and that 2-solid result then
-    # corrupted every later boolean op on the tray (one fuse silently
-    # returned an empty shape). A tiny guaranteed overlap sidesteps the
-    # coincident-face case entirely.
-    OVERLAP_EPS = 0.1
-    bead_ring = horizontal_band_ring(
-        INTERNAL_W + 2 * OVERLAP_EPS, INTERNAL_D + 2 * OVERLAP_EPS,
-        inner_r + OVERLAP_EPS, SNAP_INTERFERENCE + OVERLAP_EPS,
-        SNAP_BEAD_BAND_H, bead_z0, (WALL_T - OVERLAP_EPS, WALL_T - OVERLAP_EPS))
-    # Chamfer the bead's top/bottom edges so it's a gentle ramp, not a
-    # square step -- eases both insertion and removal. NOT a *fillet*
-    # (constant-radius round): OCCT fillets a horizontal rim edge on a
-    # plan-rounded rectangle by extending the same continuous chain
-    # through the corner arcs (tangent-connected), and the resulting
-    # corner blend geometrically bulges outward by close to the full
-    # fillet radius (a torus-around-a-convex-corner effect), silently
-    # growing/shrinking the cavity footprint by ~2x the radius and
-    # invalidating the interference/strain numbers below. A chamfer cuts a
-    # bounded flat facet instead and cannot bulge past the original
-    # surface.
-    bead_edges = [e for e in bead_ring.Edges if _is_horizontal_ring_edge(e)]
-    try:
-        bead_ring = bead_ring.makeChamfer(BEAD_CHAMFER_SIZE, bead_edges)
-    except Part.OCCError:
-        # Not cosmetic if this triggers: a square bead riding into a
-        # chamfered groove has no lead-in ramp at all, which is exactly
-        # what a rough/binding snap feels like -- see BEAD_CHAMFER_SIZE's
-        # comment for the safe range.
-        print("WARNING: bead chamfer failed (OCCT) -- tray bead is an "
-              "UNCHAMFERED SQUARE ridge, not the smooth ramp this design "
-              "relies on. Reduce BEAD_CHAMFER_SIZE and re-test.")
-    tray = tray.fuse(bead_ring)
+    # Lid screws: clearance holes through the -Y and +Y walls, countersunk
+    # on the outside (same as AB98's case).
+    csk_depth = (CSK_D - SCREW_D) / 2.0  # 90-degree countersink
+    for x in SCREW_XS:
+        for outside_y, d in ((0.0, 1), (EXTERNAL_D, -1)):
+            tray = tray.cut(Part.makeCylinder(SCREW_D / 2.0, WALL_T + 2,
+                            Vector(WALL_T + x, outside_y - d, SCREW_Z), Vector(0, d, 0)))
+            tray = tray.cut(Part.makeCone(CSK_D / 2.0 + 0.1, SCREW_D / 2.0, csk_depth + 0.1,
+                            Vector(WALL_T + x, outside_y - d * 0.1, SCREW_Z), Vector(0, d, 0)))
 
     # Component shelves, all on the tray floor. Battery and MCU sit side
     # by side on the floor (section 4); the display has NO shelf, post,
@@ -927,14 +750,9 @@ def build_tray():
     # (SWITCH_PCB_BELOW_CLEARANCE) is DERIVED (section 5) and much taller
     # than the switches themselves need -- just unused clearance under
     # the switch PCB, harmless.
-    # floor_r matches the lid skirt's own corner radius (skirt_r,
-    # build_lid()) rather than the small default (1.0mm): the switch
-    # column sits flush against the cavity's own far wall/corner, and the
-    # skirt reaches down into this shelf's own Z range there, sweeping a
-    # LARGER radius through that same corner than the shelf's default
-    # radius would leave room for. Sharp corners here would overlap the
-    # skirt (confirmed: ~30mm^3 via tray.common(lid)) -- matching the
-    # radii removes the conflict at its source.
+    # floor_r matches the cavity's own corner radius: the switch column
+    # sits flush against the cavity's far wall/corner, so sharp shelf
+    # corners would poke through the rounded outer wall.
     # DERIVED (not a flat 2.0mm) so the shelf's inner pocket -- where the
     # switch PCB actually rests -- lands exactly on SWITCH_HOLE (14mm),
     # not 14.6mm: a flat 2.0mm rim only cancels SWITCH_PCB_MARGIN_Y, and
@@ -942,7 +760,7 @@ def build_tray():
     # (line below) leaking straight into the inner opening instead of
     # being absorbed by the rim.
     SWITCH_SHELF_RIM_W = ((SWITCH_COL_W + 2 * FIT_CLEARANCE_XY) - SWITCH_HOLE) / 2.0
-    switch_shelf_floor_r = max(CORNER_FILLET_OUTER - WALL_T - SKIRT_CLEARANCE, 0.1)
+    switch_shelf_floor_r = inner_r
     tray = tray.fuse(shelf_frame(
         SWITCH_COL_W + 2 * FIT_CLEARANCE_XY, SWITCH_COL_L + 2 * FIT_CLEARANCE_XY,
         SWITCH_SHELF_RIM_W, SWITCH_SHELF_H, FLOOR_T,
@@ -1008,6 +826,16 @@ def build_tray():
                             Vector(divider_x0, divider_y0, FLOOR_T))
     tray = tray.fuse(divider)
 
+    # Notches in the switch shelf's -Y/+Y sides for the lid's screw tabs
+    # there (SCREW_XS) -- leaves a thin strip of rim between notch and pocket.
+    notch_d = SCREW_CLR + TAB_T + 0.3
+    for x in SCREW_XS:
+        if x < SWITCH_COL_X0:
+            continue
+        for y0 in (WALL_T, WALL_T + INTERNAL_D - notch_d):
+            tray = tray.cut(Part.makeBox(TAB_W + 0.6, notch_d, SWITCH_SHELF_H + 1,
+                            Vector(WALL_T + x - TAB_W / 2.0 - 0.3, y0, FLOOR_T)))
+
     # USB-C notch through the -Y wall (the top of the case, the screen
     # row's own exterior-facing edge -- MCU is rotated so its USB-C short
     # edge faces this wall). Sized to USB_C_NOTCH_Z0/HEIGHT (section 5):
@@ -1020,139 +848,44 @@ def build_tray():
     cutter = stadium_slot_y(usbc_cx, USB_C_NOTCH_Z0, notch_w, USB_C_NOTCH_HEIGHT, -2.0, 12.0)
     tray = tray.cut(cutter)
 
-    # microSD slot, same -Y wall, same X center as the USB-C notch,
-    # MICROSD_GAP_ABOVE_USBC above it (section 5/2) -- same STADIUM shape
-    # as the USB-C cutter for a clean, print-friendly rounded-end opening.
-    sd_cutter = stadium_slot_y(usbc_cx, MICROSD_SLOT_Z0, MICROSD_SLOT_W, MICROSD_SLOT_H, -2.0, 12.0)
-    tray = tray.cut(sd_cutter)
-
     return tray
 
 
 def build_lid():
     """Top shell: a flat ceiling (with display window + switch plate
-    holes), a full-width "cap wall" below it (the lid's OWN visible outer
-    wall, matching the tray's profile so the two meet flush at the seam
-    -- see section 5), and below THAT, a separate, narrower skirt that
-    NESTS INSIDE the tray's cavity for ENGAGE_DEPTH, hidden, purely for
-    the snap engagement. Local Z=0 is the skirt's free tip; the ceiling
-    sits at the top, local Z=LID_EXTERNAL_H. main() translates the whole
-    thing up by LID_PLACEMENT_Z to seat it for the preview."""
-    ceiling = rounded_box(EXTERNAL_W, EXTERNAL_D, CEIL_T, CORNER_FILLET_OUTER,
-                           Vector(0, 0, ENGAGE_DEPTH + LID_CAP_WALL_H))
-    # Round the OUTER TOP edge (where the ceiling's top face meets the
-    # outer wall) -- the other half of "comfortable in the hand" (see
-    # OUTER_EDGE_CHAMFER_STAGES's comment, and the matching bottom-edge
-    # treatment in build_tray()). Done here, on the plain ceiling solid
-    # before fusing with anything else, same reasoning as always in this
-    # file. Wall extends in -Z from the ceiling's top face, so
-    # direction=-1.
-    ceiling = rounded_edge_chamfer(ceiling, LID_EXTERNAL_H, OUTER_EDGE_CHAMFER_STAGES, direction=-1)
-
-    # Cap wall: the lid's own visible outer wall, from the seam up to the
-    # ceiling -- same OUTER footprint/profile as the tray's own wall
-    # (build_tray()) so the two are flush and continuous at the seam, not
-    # a visible step.
+    holes), a "cap wall" below it (the lid's visible outer wall, matching
+    the tray's profile so the two meet flush at the seam -- see section
+    5), and four screw tabs hanging down past the seam into the tray.
+    Local Z=0 is the seam; the ceiling's top is local Z=LID_EXTERNAL_H.
+    main() translates the whole thing up by LID_PLACEMENT_Z to seat it for
+    the preview."""
+    # Solid block for ceiling + cap wall (same outer profile as the tray's
+    # wall, flush at the seam), with the OUTER TOP edge rounded first while
+    # it's still solid -- the ceiling alone (CEIL_T) is thinner than the
+    # rounding, which makes OCCT fail. Then hollowed out, as in build_tray().
     inner_r = max(CORNER_FILLET_OUTER - WALL_T, 0.1)  # matches build_tray()'s cavity radius
-    skirt_r = max(inner_r - SKIRT_CLEARANCE, 0.1)
-    # The cavity is cut to match the SKIRT's own (SKIRT_CLEARANCE-inset)
-    # footprint exactly, not the tray's full INTERNAL_W -- so it meets the
-    # skirt at a flush, EXACTLY COINCIDENT boundary with no radial gap.
-    # Cutting it at INTERNAL_W instead (matching the tray) would leave a
-    # SKIRT_CLEARANCE-wide gap between the skirt's outer face and the cap
-    # wall's inner face that never touches, so fuse()'ing them gives 2
-    # disconnected solids instead of 1. A bridging ring sized to overlap
-    # both sides of that gap doesn't work either -- its outer edge,
-    # straddling the seam, ends up occupying the same space as the tray's
-    # own wall just below the seam. Matching the cavity to the skirt's
-    # footprint directly avoids both problems -- no gap, and nothing
-    # reaches outside the tray's own hollow cavity radius, ever.
-    cap_wall_outer = rounded_box(EXTERNAL_W, EXTERNAL_D, LID_CAP_WALL_H, CORNER_FILLET_OUTER,
-                                  Vector(0, 0, ENGAGE_DEPTH))
-    cap_wall_cavity = rounded_box(
-        INTERNAL_W - 2 * SKIRT_CLEARANCE, INTERNAL_D - 2 * SKIRT_CLEARANCE, LID_CAP_WALL_H + 2, skirt_r,
-        Vector(WALL_T + SKIRT_CLEARANCE, WALL_T + SKIRT_CLEARANCE, ENGAGE_DEPTH - 1))
-    cap_wall = cap_wall_outer.cut(cap_wall_cavity)
-    lid = ceiling.fuse(cap_wall)
+    outer = rounded_box(EXTERNAL_W, EXTERNAL_D, LID_EXTERNAL_H, CORNER_FILLET_OUTER)
+    outer = rounded_edge_chamfer(outer, LID_EXTERNAL_H, OUTER_EDGE_CHAMFER_STAGES, direction=-1)
+    cavity = rounded_box(INTERNAL_W, INTERNAL_D, LID_CAP_WALL_H + 1, inner_r, Vector(WALL_T, WALL_T, -1))
+    lid = outer.cut(cavity)
 
-    # Skirt: sized to slide inside the tray's INTERNAL_W x INTERNAL_D
-    # cavity with a small running clearance, using the same corner radius
-    # as that cavity so it nests flush. Its outer footprint is EXACTLY the
-    # cap wall's cavity footprint above (same dimensions, same origin, same
-    # radius) so the two meet at a flush, coincident boundary with no gap
-    # -- see the long comment above cap_wall_cavity for why that matters.
-    skirt_outer = rounded_box(
-        INTERNAL_W - 2 * SKIRT_CLEARANCE, INTERNAL_D - 2 * SKIRT_CLEARANCE,
-        ENGAGE_DEPTH, skirt_r, Vector(WALL_T + SKIRT_CLEARANCE, WALL_T + SKIRT_CLEARANCE, 0))
-    # NOTE: this cavity MUST use a rounded corner too (matching skirt_r
-    # minus the wall thickness), not a sharp Part.makeBox -- a sharp
-    # cavity cut from a rounded outer wall makes the wall vanish at the
-    # corners (the rounded outer surface is pulled in further than the
-    # sharp cavity corner sticks out once SNAP_SKIRT_T < the corner's own
-    # cut-in depth), splitting the ring into 4 disconnected straight
-    # segments. Caught by checking len(skirt.Solids) == 4 instead of 1.
-    skirt_cavity_r = max(skirt_r - SNAP_SKIRT_T, 0.1)
-    skirt_cavity = rounded_box(
-        INTERNAL_W - 2 * SKIRT_CLEARANCE - 2 * SNAP_SKIRT_T,
-        INTERNAL_D - 2 * SKIRT_CLEARANCE - 2 * SNAP_SKIRT_T,
-        ENGAGE_DEPTH + 2, skirt_cavity_r,
-        Vector(WALL_T + SKIRT_CLEARANCE + SNAP_SKIRT_T, WALL_T + SKIRT_CLEARANCE + SNAP_SKIRT_T, -1))
-    skirt = skirt_outer.cut(skirt_cavity)
-    lid = lid.fuse(skirt)
-
-    # Skirt-to-cap-wall bridge: even with skirt_outer and cap_wall_cavity
-    # set to EXACTLY the same footprint, fuse()'ing two solids that only
-    # share an exactly-coincident face -- no actual 3D overlap -- produces
-    # 2 disconnected solids instead of 1 (the same failure mode as the
-    # coincident-face bead issue, section 8, just a lateral/radial
-    # coincidence instead of a horizontal one). Fixed with a small ring
-    # reaching OVERLAP_EPS beyond the skirt's own outer footprint,
-    # straddling the Z boundary, giving genuine volumetric overlap with
-    # BOTH the skirt and the cap wall. Sized to stay well inside the
-    # tray's actual cavity radius (max reach is INTERNAL_W - 0.1mm) so it
-    # can never collide with the tray's own wall material.
-    OVERLAP_EPS_BRIDGE = 0.15
-    bridge_ring = horizontal_band_ring(
-        INTERNAL_W - 2 * SKIRT_CLEARANCE + 2 * OVERLAP_EPS_BRIDGE,
-        INTERNAL_D - 2 * SKIRT_CLEARANCE + 2 * OVERLAP_EPS_BRIDGE,
-        skirt_r + OVERLAP_EPS_BRIDGE, SNAP_SKIRT_T + OVERLAP_EPS_BRIDGE,
-        1.0, ENGAGE_DEPTH - 0.5,
-        (WALL_T + SKIRT_CLEARANCE - OVERLAP_EPS_BRIDGE, WALL_T + SKIRT_CLEARANCE - OVERLAP_EPS_BRIDGE))
-    lid = lid.fuse(bridge_ring)
-
-    # Mating groove, cut into the skirt's OUTER face: a SHALLOW recess
-    # that reaches SNAP_INTERFERENCE further out than the skirt's nominal
-    # outer surface (to make room for the bead's tip) plus a small extra
-    # bite (GROOVE_EXTRA_DEPTH) inward for a bit of positive engagement,
-    # at the same global Z the tray's bead sits at (BEAD_Z0, section 5 --
-    # near the skirt's free tip, not the rim, so the strain calculation's
-    # flex-length assumption holds -- see snap_fit_strain()).
-    # The pocket's inset is deliberately kept LESS than SNAP_SKIRT_T: an
-    # inset of SNAP_SKIRT_T + SNAP_INTERFERENCE or more cuts deeper than
-    # the skirt wall itself is thick and severs the skirt ring at the
-    # groove band into disconnected solids. Keeping a real wall thickness
-    # behind the pocket keeps the skirt one continuous tube.
-    GROOVE_EXTRA_DEPTH = 0.4
-    assert SNAP_INTERFERENCE + GROOVE_EXTRA_DEPTH < SNAP_SKIRT_T, (
-        "groove would cut deeper than the skirt is thick -- reduce "
-        "GROOVE_EXTRA_DEPTH or increase SNAP_SKIRT_T")
-    groove_inset = SNAP_INTERFERENCE + GROOVE_EXTRA_DEPTH
-    groove_z0_local = GROOVE_Z0_LOCAL
-    groove_ring = horizontal_band_ring(
-        INTERNAL_W - 2 * SKIRT_CLEARANCE + 2 * SNAP_INTERFERENCE,
-        INTERNAL_D - 2 * SKIRT_CLEARANCE + 2 * SNAP_INTERFERENCE,
-        skirt_r + SNAP_INTERFERENCE, groove_inset,
-        SNAP_BEAD_BAND_H, groove_z0_local,
-        (WALL_T + SKIRT_CLEARANCE - SNAP_INTERFERENCE, WALL_T + SKIRT_CLEARANCE - SNAP_INTERFERENCE))
-    # Matching chamfer on the groove -- see the long comment in build_tray()
-    # for why this is a chamfer and not a fillet.
-    groove_edges = [e for e in groove_ring.Edges if _is_horizontal_ring_edge(e)]
-    try:
-        groove_ring = groove_ring.makeChamfer(BEAD_CHAMFER_SIZE, groove_edges)
-    except Part.OCCError:
-        print("WARNING: groove chamfer failed (OCCT) -- lid groove is an "
-              "UNCHAMFERED SQUARE pocket. Reduce BEAD_CHAMFER_SIZE and re-test.")
-    lid = lid.cut(groove_ring)
+    # Screw tabs (section 3's "Lid screws"): hang from the cap wall/ceiling
+    # down past the seam, SCREW_CLR off the long walls' inner faces, with
+    # the heat-set insert hole straight through (pressed in from the wall
+    # side). Above the seam each tab also reaches into the cap wall so it's
+    # anchored even where it stops short of the ceiling (switch column).
+    tab_z0 = TAB_Z0 - LID_PLACEMENT_Z
+    for x in SCREW_XS:
+        x0 = WALL_T + x - TAB_W / 2.0
+        tab_top = LID_CAP_WALL_H + 0.01 if x < SWITCH_COL_X0 else SWITCH_TAB_TOP_Z - LID_PLACEMENT_Z
+        for y0, d in ((WALL_T + SCREW_CLR, 1), (EXTERNAL_D - WALL_T - SCREW_CLR - TAB_T, -1)):
+            tab = Part.makeBox(TAB_W, TAB_T, tab_top - tab_z0, Vector(x0, y0, tab_z0))
+            anchor_y0 = y0 - SCREW_CLR - 0.5 if d > 0 else y0
+            tab = tab.fuse(Part.makeBox(TAB_W, TAB_T + SCREW_CLR + 0.5, tab_top, Vector(x0, anchor_y0, 0)))
+            insert_y = y0 - 1 if d > 0 else y0 + TAB_T + 1
+            tab = tab.cut(Part.makeCylinder(INSERT_D / 2.0, TAB_T + 2,
+                          Vector(WALL_T + x, insert_y, SCREW_Z - LID_PLACEMENT_Z), Vector(0, d, 0)))
+            lid = lid.fuse(tab)
 
     # Display window: sized independently of SCREEN_W/SCREEN_L (the full
     # module footprint, 65x30, used for the case sizing above) -- fixed at
@@ -1278,9 +1011,8 @@ def build_lid():
     # -Y and +Y inner faces only (see that section's comment for why not
     # all 4 sides), near screen_wall's own free tip -- SCREEN_SNAP_TIP_OFFSET
     # short of it, same "push the bead near the free end so the strain
-    # formula's flex length is nearly the full cantilever" logic as the
-    # main snap's BEAD_Z0 (build_tray()). Plain boxes, deliberately NOT
-    # chamfered like the main bead/groove: at SCREEN_SNAP_INTERFERENCE's
+    # formula's flex length is nearly the full cantilever" logic. Plain
+    # boxes, deliberately NOT chamfered: at SCREEN_SNAP_INTERFERENCE's
     # scale (0.15mm), a lead-in bevel would be smaller than this printer's
     # resolvable feature size and risks a degenerate OCCT chamfer on such
     # a thin (0.15mm-proud) bump -- a square-edged bump is both safer to
@@ -1299,6 +1031,8 @@ def build_lid():
         lip_w, SCREEN_SNAP_INTERFERENCE + SCREEN_SNAP_OVERLAP_EPS, SCREEN_SNAP_BAND_H,
         Vector(lip_x0, lip_y0 + lip_d - SCREEN_SNAP_INTERFERENCE, snap_z0))
     screen_wall = screen_wall.fuse(near_bar).fuse(far_bar)
+    # Its -X segment reaches past the thin (WALL_T) exterior wall: trim to the case outline.
+    screen_wall = screen_wall.common(rounded_box(EXTERNAL_W, EXTERNAL_D, LID_EXTERNAL_H, CORNER_FILLET_OUTER))
 
     lid = lid.fuse(screen_wall)
 
@@ -1333,21 +1067,7 @@ def build_lid():
     cutter = stadium_slot_y(usbc_cx, notch_z0_local, notch_w, USB_C_NOTCH_HEIGHT, -2.0, 12.0)
     lid = lid.cut(cutter)
 
-    # microSD slot (see build_tray()): same X center and shape as the
-    # USB-C notch, converted to the lid's own local Z frame the same way.
-    sd_z0_local = MICROSD_SLOT_Z0 - LID_PLACEMENT_Z
-    sd_cutter = stadium_slot_y(usbc_cx, sd_z0_local, MICROSD_SLOT_W, MICROSD_SLOT_H, -2.0, 12.0)
-    lid = lid.cut(sd_cutter)
-
-    return lid
-
-
-def _is_horizontal_ring_edge(edge):
-    """Edges of a horizontal_band_ring that run in a horizontal plane
-    (i.e. the top/bottom rims of the ring, which is what we want to round
-    into a bead profile) -- both endpoints share the same Z."""
-    p0, p1 = edge.Vertexes[0].Point, edge.Vertexes[1].Point
-    return abs(p0.z - p1.z) < 1e-6
+    return lid.removeSplitter()
 
 
 def _edges_at_z(shape, z_level):
@@ -1392,7 +1112,6 @@ def rounded_edge_chamfer(shape, z_level, sizes, direction):
 # ====================================================================
 
 def print_summary():
-    snap = snap_fit_strain()
     screen_snap = screen_snap_strain()
     print("=" * 72)
     print("ESP32-S3 PORTABLE CASE -- computed dimensions")
@@ -1428,21 +1147,10 @@ def print_summary():
         TRAY_EXTERNAL_H, 100.0 * SEAM_FRACTION))
     print("  tray external height (floor to seam)        : %.2f mm" % TRAY_EXTERNAL_H)
     print("  lid external height (cap wall + ceiling, above the seam): %.2f mm" % (LID_CAP_WALL_H + CEIL_T))
-    print("  lid external height total (incl. hidden skirt below the seam): %.2f mm" % LID_EXTERNAL_H)
-    print("  lid's skirt is HIDDEN, nested inside the tray's cavity, reaching %.2fmm" % ENGAGE_DEPTH)
-    print("  below the seam for the snap engagement only -- not visible from outside")
-    print("  bead/groove sit near Z=%.2f (close to the skirt's free tip, not the seam --" % BEAD_Z0)
-    print("  needed for the strain check below to be accurate, see snap_fit_strain())")
+    print("Lid screws: %d x M2x4 countersunk + M2x3 heat-set inserts, at Z=%.2f mm (%.1fmm below the seam)" % (
+        2 * len(SCREW_XS), SCREW_Z, SCREW_BELOW_SEAM))
+    print("  tabs %.1f x %.1f mm, hanging to Z=%.2f mm" % (TAB_W, TAB_T, TAB_Z0))
     print("Switch stack protrudes above outer case top : %.2f mm (expected -- see the module docstring's SWITCHES note)" % SWITCH_PROTRUSION_ABOVE_CASE)
-    print()
-    print("-- Snap-fit strain check (cantilever beam, Bayer/GE formula) --")
-    print("skirt depth (ENGAGE_DEPTH) = %.2f mm, true flex length L (skirt depth minus" % ENGAGE_DEPTH)
-    print("  BEAD_TIP_OFFSET) = %.2f mm, skirt thickness t = %.2f mm, interference d = %.2f mm" % (
-        SNAP_TRUE_FLEX_LENGTH, SNAP_SKIRT_T, SNAP_INTERFERENCE))
-    print("computed strain   : %.2f%%" % (snap["strain"] * 100))
-    print("allowable strain  : %.2f%% (= %.0f%% of %.1f%% elongation-at-break)" % (
-        snap["allowable"] * 100, SNAP_STRAIN_SAFETY_FRACTION * 100, ELONGATION_AT_BREAK * 100))
-    print("result            : %s (%.0f%% margin)" % ("PASS" if snap["passes"] else "FAIL -- reduce interference or increase flex length", snap["margin_pct"]))
     print()
     print("-- Screen snap-fit detent strain check (same formula, screen_wall's own bars) --")
     print("wall cantilever (SCREEN_RETENTION_WALL_H) = %.2f mm, true flex length L (minus" % SCREEN_RETENTION_WALL_H)
@@ -1460,8 +1168,6 @@ def print_summary():
         ("Display module thickness", DISPLAY_THICKNESS, "e-paper HAT glass+PCB, no pin header assumed"),
         ("MCU assembled thickness", MCU_THICKNESS, "XIAO board + antenna/shield + solder"),
         ("MCU USB-C connector center height", USB_C_CENTER_Z_ABOVE_SHELF, "above MCU shelf -- verify against real board"),
-        ("microSD slot width", MICROSD_SLOT_W, "11mm card + slide clearance -- verify against real board"),
-        ("microSD slot height", MICROSD_SLOT_H, "card thickness + holder margin -- verify against real board"),
         ("Switch PCB thickness", SWITCH_PCB_THICKNESS, "standard FR4"),
         ("PCB-to-plate gap", PCB_TO_PLATE, "universal keyboard-plate convention"),
         ("Switch key pitch", SWITCH_PITCH, "standard 0.75in / 19.05mm keyboard pitch"),
@@ -1473,22 +1179,16 @@ def print_summary():
     print()
     print("-- Pre-print checklist --")
     print("  [ ] Print a small test coupon (~15mm of perimeter wall, one")
-    print("      switch plate hole) to verify the %.1fmm snap interference" % SNAP_INTERFERENCE)
-    print("      and the 14x14mm plate-hole fit on YOUR printer before the full print.")
+    print("      switch plate hole) to verify the 14x14mm plate-hole fit on YOUR")
+    print("      printer before the full print.")
     print("  [ ] Confirm actual e-ink module thickness and MCU thickness against")
     print("      the physical parts -- both are ASSUMPTIONS above, not datasheet values.")
     print("  [ ] Confirm the XIAO's USB-C connector Z-position against the real board;")
     print("      the cutout has %.1fmm of height to absorb a modest placement error." % USB_C_CUTOUT_H)
-    print("  [ ] Confirm the microSD slot's actual position on the Sense board -- its")
-    print("      opening is placed %.1fmm above the USB-C notch by assumption, not a" % MICROSD_GAP_ABOVE_USBC)
-    print("      measured board position; re-check card insertion/removal clears the case.")
-    print("  [ ] If this case will be opened/closed often, consider printing the LID")
-    print("      in PETG (elongation-at-break ~20-30%%) instead of PLA (%.1f%%) for a" % (ELONGATION_AT_BREAK * 100))
-    print("      more durable snap; re-run with ELONGATION_AT_BREAK adjusted to check margin.")
-    print("  [ ] Slice with >=3 perimeters on the lid skirt / tray bead region so the")
-    print("      %.1fmm flex wall is solid, not sparse-infill." % SNAP_SKIRT_T)
-    print("  [ ] Same for the screen retention wall (screen_wall, %.1fmm thick) -- the" % SCREEN_WALL_T)
-    print("      new %.2fmm snap detent on its long sides needs solid perimeters too," % SCREEN_SNAP_INTERFERENCE)
+    print("  [ ] Check the heat-set insert's datasheet hole size (INSERT_D = %.1fmm) and" % INSERT_D)
+    print("      press the inserts into the lid tabs from the wall side before assembly.")
+    print("  [ ] Slice the screen retention wall (screen_wall, %.1fmm thick) with >=3 perimeters -- the" % SCREEN_WALL_T)
+    print("      %.2fmm snap detent on its long sides needs solid perimeters," % SCREEN_SNAP_INTERFERENCE)
     print("      not sparse infill, to actually flex/spring instead of just crushing.")
     print("  [ ] The display is adhesive/foam-tape mounted with no posts, shelves, or")
     print("      walls holding it up in the tray -- make sure the adhesive bond is solid")
@@ -1511,9 +1211,6 @@ def export_stl(shape, path, linear_deflection=0.05, angular_deflection=0.3):
 
 
 def main():
-    if not snap_fit_strain()["passes"]:
-        print("WARNING: snap-fit strain check FAILS with current constants -- "
-              "the geometry will still be generated, but see print_summary().")
     if not screen_snap_strain()["passes"]:
         print("WARNING: screen snap-fit detent strain check FAILS with current "
               "constants -- the geometry will still be generated, but see print_summary().")
@@ -1539,20 +1236,26 @@ def main():
 
     print("Exporting %s ..." % bottom_path)
     export_stl(tray, bottom_path)
+    # Lid prints ceiling-down (tabs up), dropped onto Z=0.
+    lid_print = lid.copy()
+    lid_print.rotate(Vector(0, 0, 0), Vector(1, 0, 0), 180)
+    bb = lid_print.BoundBox
+    lid_print.translate(Vector(-bb.XMin, -bb.YMin, -bb.ZMin))
     print("Exporting %s ..." % top_path)
-    export_stl(lid, top_path)
+    export_stl(lid_print, top_path)
 
-    # NOTE on the two files above: each is exported zeroed to its own
-    # print-bed contact face (tray floor at Z=0; lid's skirt tip at its
-    # own local Z=0) -- that's deliberate and correct for slicing them as
+    # NOTE on the two files above: each is exported in its own print
+    # orientation -- that's deliberate and correct for slicing them as
     # two independent print jobs. It also means loading both STLs
     # straight into a generic viewer/slicer WITHOUT repositioning one of
-    # them will show them sitting at the wrong relative height (both
-    # starting at Z=0 instead of the lid seated LID_PLACEMENT_Z above the
-    # tray) -- looks like a fit mismatch, isn't one. The combined file
+    # them shows them in the wrong relative pose -- looks like a fit
+    # mismatch, isn't one. The combined file
     # below exists purely to check the fit visually in any STL viewer.
     lid_placed = lid.copy()
     lid_placed.translate(Vector(0, 0, LID_PLACEMENT_Z))
+    clash = tray.common(lid_placed).Volume
+    if clash > 0.01:
+        print("WARNING: tray and lid overlap by %.2f mm^3" % clash)
     assembled_path = os.path.join(out_dir, "case_assembled_preview.stl")
     print("Exporting %s (visual fit-check only, NOT for printing) ..." % assembled_path)
     export_stl(Part.makeCompound([tray, lid_placed]), assembled_path)
